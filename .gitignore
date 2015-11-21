@@ -1,0 +1,14 @@
+# use glob syntax.
+syntax: glob
+
+*.elc
+*.pyc
+*.*~
+.idea/*
+*.log
+*.dump
+.idea
+sandbox/*
+sandbox*
+docs/build/*
+*.orig
