@@ -12,11 +12,14 @@ reaches the cloud.
 
 The documentation stands to help client implementations use the broker
 and thus further develop their implementation. However, until the latest
-milestone of the ::doc`roadmap </roadmap>`
+milestone of the :doc:`roadmap </roadmap>`.
 
 You may contact the Tegris project maintainer by dropping a message at
 `@rafgoncalves <http://www.twitter.com/rafgoncalves>`_ or using the
 `issue tracker`_.
+You may contact the students rebootin the project by dropping a message
+at `@acentau <http://www.twitter.com/acentau>`_ or `mailing`_ one of its
+members.
 
 #################
 Table of Contents
@@ -35,6 +38,6 @@ Table of Contents
    licensing
    sandbox
 
-
 .. _FieldLink: https://www.fieldlink.me
 .. _issue tracker: https://bitbucket.org/tegris/mqtt-broker/issues
+.. _mailing: mailto:par@rigelk.eu

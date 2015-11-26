@@ -2,6 +2,27 @@
 Project Roadmap
 ###############
 
+Milestone IoT #1
+================
+
+- Message Broker acts as an intermediary
+- Relaying messages between devices and Relayr cloud
+
+Milestone IoT #2
+================
+
+- Fully functional local Message Broker with internal database
+
+Milestone IoT #3
+================
+
+- Capability to handle remote publications and subscriptions
+
+----
+
+########################
+Original Project Roadmap
+########################
 .. important::
    These features are presented in *no special order*, neither is there a
    development schedule for them. If your project requires any of these features
