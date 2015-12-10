@@ -1,0 +1,233 @@
+\documentclass[fontsize=11pt,a4paper]{scrartcl}
+
+\usepackage{graphicx}
+\usepackage[T1]{fontenc}
+\usepackage[ngerman]{babel}
+
+\usepackage[tmargin=1in,bmargin=1in,lmargin=1.25in,rmargin=1.25in]{geometry}
+
+\usepackage{ifxetex}
+
+\ifxetex
+\else
+  \usepackage[utf8x]{inputenc}
+\fi
+
+\usepackage{mathptmx}
+\usepackage[scaled=.92]{helvet}
+\usepackage{courier}
+
+\usepackage{listings}
+
+\usepackage{microtype}
+
+\usepackage{amsmath}
+\usepackage{MnSymbol}
+\usepackage{wasysym}
+
+\newcommand{\HRule}{\rule{\linewidth}{0.2mm}}
+
+\usepackage{hyperref}
+
+\begin{document}
+
+\setlength{\parindent}{0mm}
+
+\begin{titlepage}
+
+% Upper part of the page
+\textsf{\large Technische Universität Berlin\\
+Fachgebiet Telekommunikationsnetze (TKN)\\[0.5cm]}
+
+\HRule \\[0.4cm]
+\begin{minipage}{0.49\textwidth}
+\begin{flushleft}
+\textsf{Programmierpraktikum Kommunikationstechnologien}
+\end{flushleft}
+\end{minipage}
+\begin{minipage}{0.49\textwidth}
+\begin{flushright}
+\textsf{Wintersemester 2015/16}
+\end{flushright}
+\end{minipage}
+\\[0.4cm]
+\HRule \\[1.0cm]
+
+\today \\[0.5cm]
+
+\textsf{{ \huge Gruppe Lokaler Broker \\[0.5cm] - Lastenheft - } \\[0.5cm]}
+
+Daniel Happ \\
+\textit{{\small \href{mailto:happ@tkn.tu-berlin.de?subject=Programmierpraktikum\%20Kommunikationstechnologien}{happ@tkn.tu-berlin.de}}} \\
+
+\begin{center}
+\vfill
+\includegraphics[width=0.25\textwidth]{./images/TU_Logo_lang_1c_schwarz} \\[1.0cm]
+\HRule
+\end{center}
+
+\end{titlepage}
+
+\setlength{\parindent}{4mm}
+
+\section{Zielbestimmung}
+% Hier soll das Ziel des Projektes in eigenen Worten beschrieben werden.
+% Dabei sollte auf die Bedeutung und den Nutzen des Projektergebnisses eingegangen werden.
+% Dieser Abschnitt ist für alle Teams identisch, muss also nicht unbedingt angepasst werden.
+
+Zu erstellen ist eine weitgehend autarke lokale Sensor-Plattform, die von der Messung von Sensorwerten über die Verbreitung von Sensorwerten im Netz bis hin zur Analyse und Visualisierung auf Endgeräten alle Funktionen lokal ohne externe Internet- bzw. Cloudverbindung bereitstellt.
+Als Grundlage dient die Sensor-Plattform von relayr, die im Wesentlichen aus dem Sensor Starter Kit "Wunderbar" und der dazugehörigen Cloud-Platform besteht.
+
+% Zielbestimmung für individuelles Team
+
+Ziel der Gruppenarbeit ist es, den Nachrichtenaustausch zwischen den Komponenten der anderen Gruppen lokal zu gewährleisten.
+Dazu soll eine Nachrichten-orientierte Middleware zum Einsatz kommen, die das Publish/Subscribe Paradigma unterstützt.
+Da MQTT der de-facto Standard bei IoT Anwendungen ist, soll MQTT genutzt werden.
+Ein vorhandener Broker soll dabei dahingehend verändert werden, dass sich Clients sowohl lokal als auch entfernt in der Cloud auf bestimmte Datenströme subskribieren können.
+Der Broker sorgt dafür, dass Subskriptionen wenn möglich lokal bedient werden und Sensor-Daten nur dann in die Cloud geschickt werden, wenn das auch nötig ist.
+
+\section{Umgebung}
+
+Das Produkt soll weitgehend unabhängig von der genutzten Hard- und Software entwickelt werden.
+Die folgende Produktumgebung stellt jedoch die Umgebung dar, die für eine Referenzimplementierung genutzt wird.
+
+\subsection{Hardware}
+
+\begin{description}
+\item[relayr Wunderbar]
+Das Sensor Starter Kit "Wunderbar" der Firmen Mikroelektronica bzw. relayr stellt die Sensordaten zur Verfügung.
+Das "Wunderbar" Kit besteht aus fünf Sensoren und einem Baustein an dem alle Sensoren mit Groove-Anschluss angeschlossen werden können.
+Die mitgelieferten Sensoren sind:
+Temperatur/Feuchtigkeitssensor auf Basis des HTU21D, einem Low-Power Digital-Sensor für relative Luftfeuchtigkeit und Temperatur;
+Beschleunigungssensor/Gyroskop auf Basis des MPU-6500 Sechs-Achsen Gyro- und Accelerometers;
+Licht-/Näherungssensor auf Basis des TCS37717 High-Sensitivity RGB-Farb- und Näherungssensors;
+IR-Transmitter mit dem SFH4441 High-Power 950 nm Infrator-Emitter;
+Mikrofon/Geräuschsensor.
+Zudem ist ein Gateway-Knoten vorhanden, der die Daten in die Cloud weiterleitet.
+Die Verbindung zwischen den Sensoren und dem Gateway-Knoten benutzt das Protokoll Bluetooth Low Energy (BLE), welches auch unter dem Namen Bluetooth Smart vermarktet wird.
+Dazu wird ein Nordic nRF51822 Modul eingesetzt.
+Der Gateway-Knoten verbindet sich mit WLAN im 2,4 Ghz Band zu einem vorhandenen WLAN-Netz, um über dieses Netz die Daten in die Cloud von relayr weiterzuleiten.
+Dazu wird ein Gainspan GS1500M IEEE 802.11b/g/n WLAN-Modul benutzt.
+\item[Gateway]
+Als Gateway, auf dem lokal die Verarbeitung und Verbreitung von Sensor-Daten durchgeführt wird, kommen besonders eingebettete Systeme in Frage, die ohnehin in Wohnungen bzw. kleineren bis mittleren Firmen vorhanden sind, etwas WLAN-Router oder anderes Netzwerk-Equipment, auf dem ein eingebettetes Linux-Betriebsystem läuft.
+Als Ersatz soll zunächst ein Raspberry Pi benutzt werden, der als Einplatinencomputer mit Linux-Betriebssystem ähnlich der zu erwartenden Hardware ist.
+\item[Cloud]
+Als "Cloud" kommt jeder Rechner in Frage, der das MQTT Protokoll beherrscht.
+Im produktiven Einsatz wird ein Broker auf einer virtuellen Maschine in der Cloud genutzt.
+Der Prototyp soll zunächst mittels der Cloud von relayr realisiert werden.
+\item[Client]
+Als Client kommen alle Internetfähigen Rechner in betracht.
+Von Bedeutung sind hier vor allem stationäre Rechner mit Internet-Browser und Mobiltelefone mit nativer App.
+\end{description}
+
+\subsection{Software}
+
+\begin{description}
+\item[MQTT]
+Message Queuing Telemetry Transport (MQTT) ist ein Maschine-zu-Maschine (M2M) bzw. Internet der Dinge Kommunikationsprotokoll.
+Es wurde als extrem schlankes Event-basierendes Protokoll entwickelt.
+Bei der Entwicklung lag der Fokus auf Netzwerkanbindungen, die begrenzte Bandbreite bieten bze. teuer oder instabil sind.
+Daher eignet sich MQTT besonders gut für Applikationen der Internet der Dinge.
+Da es sich als de-facto Standard im Internet der Dinge entwickelt hat, müssen alle Komponenten mit MQTT kommunizieren können.
+\end{description}
+
+\section{Anforderungen}
+% Hier sollen die Anforderungen an das Projektergebnis beschrieben werden.
+% Es soll zwischen unbedingt erforderlichen Muss-Anforderungen und optionalen Kann-Anforderungen unterschieden werden.
+
+Die einzelnen Teile des Produktes müssen bestimmte Funktionen und Anforderungen erfüllen.
+Dabei wird unterschieden zwischen verbindlichen und optionalen Anforderungen.
+Die verbindlichen Anforderungen müssen von Ihnen erfüllt werden, die optionalen sollen freiwillig umgesetzt werden.
+Auch weitere, über die hier angegebenen Funktionalitäten hinausgehenden Erweiterungen sind denkbar.
+Aufgelistet sind jeweils nur die Anforderungen des Sub-Projektes, nicht die Anforderungen aus dem gesamten Projekt.
+
+\subsection{Verbindliche Anforderungen}
+% Hier soll eine vollständige und nachprüfbare Beschreibung einer Anforderung an das Projektergebnis beschrieben werden.
+
+Die zu entwickelnde Software muss folgende Anforderungen erfüllen:
+
+\begin{itemize}
+\item Brokerage im lokalen Netzwerk; dazu nötige Implementierungen:
+    \begin{itemize}
+    \item Subscribe
+    \item Publish
+    \item Weiterleitung der Nachrichten
+    \end{itemize}
+\item Weiterleitung der Nachrichten an die Cloud:
+    \begin{itemize}
+    \item Advertisement-Nachricht zum Anmelden der Sensoren
+    \item Datenbank mit Informationen über angeschlossene Sensoren
+    \item Subscriptions von Cloud zu lokalen Broker weiterleiten
+    \item Selektives Weiterleiten von Notifications an Cloud
+    \end{itemize}
+\item Nicht funktionale Anforderungen:
+    \begin{itemize}
+    \item Modularität der Implementierung zwecks Wartbarkeit
+    \item Publish/Subscribe Protokoll soll einfach zu wechseln sein
+    \end{itemize}
+\end{itemize}
+
+\subsection{Optionale Anforderungen}
+
+Folgende Anforderungen sollen optional erfüllt werden:
+
+\begin{itemize}
+\item Sensor Registry per REST-Interface zugänglich machen:
+    \begin{itemize}
+    \item Die vorhandenen Informationen der Datenbank werden zugänglich gemacht, um z.B. eine Suche auf den Daten implementieren zu können.
+    \end{itemize}
+\end{itemize}
+
+\section{Arbeitspakete}
+% Hier sollen die einzelnen Arbeitspakete, in denen das Projekt abgearbeitet werden soll beschrieben werden.
+% Zusätzlich zu den Arbeitspaketen sollen Meilensteine definiert werden.
+% Dies sind Zeitpunkte zu denen ein Zwischenergebnis bei der Projektbearbeitung erreicht wurde und eine neue Phase beginnt.
+
+Die aus den genannten Zielbestimmung abgeleiteten Aufgaben werden in diesem Kapitel in Arbeitspakete überführt.
+
+\begin{description}
+\item[1. Meilenstein]
+Weiterleitung aller Publish- und Subscribe-Nachrichten zum Cloud-broker; zusätzlich lokales Brokering.
+\item[2. Meilenstein]
+Implementierung von Advertisement-Nachrichten und Speicherung in einer Datenbank.
+\item[3. Meilenstein]
+Selektive Weiterleitung von Publish- und Subscribe-Nachrichten anhand der Daten der Advertisement-Nachrichten.
+\end{description}
+
+\appendix
+
+\section{Checkliste der Anforderungen}
+
+\subsection{Verbindliche Anforderungen}
+
+\begin{itemize}
+\item Brokerage im lokalen Netzwerk; dazu nötige Implementierungen:
+    \begin{itemize}
+    \item[$\square$] Subscribe
+    \item[$\square$] Publish
+    \item[$\square$] Weiterleitung der Nachrichten
+    \end{itemize}
+\item Weiterleitung der Nachrichten an die Cloud:
+    \begin{itemize}
+    \item[$\square$] Advertisement-Nachricht zum Anmelden der Sensoren
+    \item[$\square$] Datenbank mit Informationen über angeschlossene Sensoren
+    \item[$\square$] Subscriptions von Cloud zu lokalen Broker weiterleiten
+    \item[$\square$] Selektives Weiterleiten von Notifications an Cloud
+    \end{itemize}
+\item Nicht funktionale Anforderungen:
+    \begin{itemize}
+    \item[$\square$] Modularität der Implementierung zwecks Wartbarkeit
+    \item[$\square$] Publish/Subscribe Protokoll soll einfach zu wechseln sein
+    \end{itemize}
+\end{itemize}
+
+\subsection{Optionale Anforderungen}
+
+\begin{itemize}
+\item Sensor Registry per REST-Interface zugänglich machen:
+    \begin{itemize}
+    \item[$\square$] Die vorhandenen Informationen der Datenbank werden zugänglich gemacht, um z.B. eine Suche auf den Daten implementieren zu können.
+    \end{itemize}
+\end{itemize}
+
+\end{document}

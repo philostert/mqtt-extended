@@ -1,0 +1,22 @@
+# Minimal
+tornado==3.1.1
+toro==0.5
+
+# Redis backend
+redis==2.10.3
+
+# for passwords stored in files
+bcrypt==2.0.0
+
+# Needed for testing
+mosquitto==1.2.3
+
+# Needed if you want to build the docs
+Jinja2==2.7.1
+MarkupSafe==0.18
+Pygments==1.6
+Sphinx==1.2
+docutils==0.11
+sphinx-rtd-theme==0.1.5
+
+

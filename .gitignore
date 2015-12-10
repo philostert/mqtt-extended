@@ -1,6 +1,14 @@
+# use glob syntax.
+syntax: glob
+
+*.elc
 *.pyc
-build
-dist
-MANIFEST
-.gitignore
+*.*~
+.idea/*
+*.log
+*.dump
 .idea
+sandbox/*
+sandbox*
+docs/build/*
+*.orig
