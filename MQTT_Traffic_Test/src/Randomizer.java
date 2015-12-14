@@ -1,3 +1,5 @@
+import java.awt.Color;
+
 @SuppressWarnings("unused")
 public class Randomizer {
 
@@ -26,5 +28,9 @@ public class Randomizer {
 			location = "Miami";
 		}
 		return location;
+	}
+	
+	public synchronized Color getColor(){
+		return new Color((int)(Math.random() * 0x1000000));
 	}
 }

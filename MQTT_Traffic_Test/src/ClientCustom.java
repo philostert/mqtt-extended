@@ -1,4 +1,5 @@
 import java.util.ArrayList;
+import java.util.Scanner;
 
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.MqttCallback;
@@ -36,6 +37,13 @@ public class ClientCustom implements MqttCallback {
 		content = "Message from MqttPublishSample";
 		qos = 2;
 		broker = "tcp://broker.hivemq.com:1883";
+		System.out.println("Set broker url \"tcp://...:port\" \n(Leave empty for Fallback to HiveMQ): ");
+		Scanner scanner = new Scanner(System.in);
+		String input;
+		if(!(input=scanner.nextLine()).isEmpty()){
+			broker=input;
+		}
+		System.out.println("Using backup Broker HiveMQ");
 		clientId = "JustATestProgram";
 		persistence = new MemoryPersistence();
 		try {
@@ -189,5 +197,13 @@ public class ClientCustom implements MqttCallback {
 
 	public ArrayList<String> getMessageList() {
 		return messageList;
+	}
+
+	public void setMessage(MqttMessage message) {
+		this.message = message;
+	}
+
+	public void setMessageList(ArrayList<String> messageList) {
+		this.messageList = messageList;
 	}
 }
