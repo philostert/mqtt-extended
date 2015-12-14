@@ -105,6 +105,7 @@ public class MainTest {
 //		assertFalse(messages==client.getMessageList().size());
 //	}
 	
+	//PublishOne
 	private void publishOne(){
 		content = client.getRan().getTemp();
 		topic = "TestCases/Locations/" + client.getRan().getLocation(Integer.parseInt(content));
