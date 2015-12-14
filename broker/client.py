@@ -295,7 +295,7 @@ class MQTTClient():
         assert isinstance(pub_msg, Publish)
 
         if self.authorization.is_publish_allowed(pub_msg.topic):
-            self.server.handle_incoming_publish(pub_msg, self)
+            self.server.handle_incoming_publish(pub_msg, self.uid)
         else:
             self.logger.warn("[uid: %s] is not allowed to publish on %s" %
                              (self.uid, pub_msg.topic))

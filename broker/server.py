@@ -279,7 +279,7 @@ class MQTTServer(TCPServer):
 
                 client.publish(cache[qos])
 
-    def broadcast_message(self, msg, sender):
+    def broadcast_message(self, msg, sender_uid):
         """
         Broadcasts a message to all clients with matching subscriptions,
         respecting the subscription QoS and restrictions on packet loops.
@@ -288,14 +288,14 @@ class MQTTServer(TCPServer):
         :param MQTTClient sender: The client which sent the message.
         """
         assert isinstance(msg, Publish)
-        assert isinstance(sender, MQTTClient)
+        assert isinstance(sender_uid, str)
 
         cache = {}
 
         for client in self.clients.values():
             # XXX Packet loop restriction #4: no forwarding to sender if sender
             # also receives subscriptions.
-            if client.uid == sender.uid and client.receive_subscriptions:
+            if client.uid == sender_uid and client.receive_subscriptions:
                 continue
             self.dispatch_message(client, msg, cache)
 
@@ -338,7 +338,7 @@ class MQTTServer(TCPServer):
         for client in tuple(self.clients.values()):
             self.disconnect_client(client)
 
-    def handle_incoming_publish(self, msg, sender):
+    def handle_incoming_publish(self, msg, sender_uid):
         """
         Handles an incoming publish. This method is normally called by the
         clients a mechanism of notifying the server that there is a new message
@@ -349,10 +349,10 @@ class MQTTServer(TCPServer):
         :param Publish msg: The Publish message to be processed.
         :param MQTTClient sender: The client which sent the message.
         """
-        assert isinstance(sender, MQTTClient)
+        assert isinstance(sender_uid, str)
 
         if msg.retain is True:
-            self._retained_messages.save(msg, sender.uid)
+            self._retained_messages.save(msg, sender_uid)
 
         # Broadcasted messages must always be delivered with the retain flag
         # set to false. The flag should only be used when the message is sent
@@ -360,7 +360,7 @@ class MQTTServer(TCPServer):
         msg.retain = False
 
         access_log.info("[.....] broadcasting payload: \"%s\"" % msg.payload)
-        self.broadcast_message(msg, sender)
+        self.broadcast_message(msg, sender_uid)
 
     def enqueue_retained_message(self, client, subscription_mask):
         """
