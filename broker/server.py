@@ -10,7 +10,7 @@ from broker import MQTTConstants
 from broker.access_control import NoAuthentication, Authorization
 from broker.client import MQTTClient
 from broker.exceptions import ConnectError
-from broker.messages import Publish, Connect, Connack
+from broker.messages import Publish, Connect, Connack, Subscribe
 from broker.connection import MQTTConnection
 from broker.factory import MQTTMessageFactory
 from broker.persistence import InMemoryPersistence
@@ -298,6 +298,27 @@ class MQTTServer(TCPServer):
             if client.uid == sender.uid and client.receive_subscriptions:
                 continue
             self.dispatch_message(client, msg, cache)
+
+    def forward_subscription(self, topic, granted_qos, sender_uid):
+        """
+        :param topic_qos: A list of topic-qos-pairs to forward.
+        :param sender_uid: sender's ID, don't send subscription back there!
+        :return: FIXME (not specified yet)
+        """
+        access_log.info("[.....] forwarding subscription from: \"%s\"" % sender_uid)
+
+        # TODO rebuild package with subscription intents; think about qos
+        msg = Subscribe()
+
+        #recipients = [c for c in self.clients if c.receive_subscriptions and not c.uid == sender_uid]
+        recipients = filter(lambda client: client.receive_subscriptions and not client.uid == sender_uid, self.clients.values())
+        for client in recipients:
+            client.send_packet(msg)
+
+        # TODO send it to "uplink" message broker if it did not come from there
+        if sender_uid: # XXX uplink is not a client, assume sender_uid would be None
+            pass
+            #Uplink.send_packet(msg)
 
     def disconnect_client(self, client):
         """

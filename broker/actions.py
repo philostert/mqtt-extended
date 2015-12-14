@@ -63,6 +63,8 @@ class IncomingSubscribe(IncomingAction):
 
         m = Suback.from_subscribe(self.msg, granted_qos)
         self.write_to_client(m)
+        # XXX escalate subscriptions
+        self._client.server.forward_subscription(topic, granted_qos, sender_uid=self._client.uid)
 
 
 class IncomingDisconnect(IncomingAction):
