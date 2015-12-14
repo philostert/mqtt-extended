@@ -279,18 +279,24 @@ class MQTTServer(TCPServer):
 
                 client.publish(cache[qos])
 
-    def broadcast_message(self, msg):
+    def broadcast_message(self, msg, sender):
         """
         Broadcasts a message to all clients with matching subscriptions,
-        respecting the subscription QoS.
+        respecting the subscription QoS and restrictions on packet loops.
 
         :param Publish msg: A :class:`broker.messages.Publish` instance.
+        :param MQTTClient sender: The client which sent the message.
         """
         assert isinstance(msg, Publish)
+        assert isinstance(sender, MQTTClient)
 
         cache = {}
 
         for client in self.clients.values():
+            # XXX Packet loop restriction #4: no forwarding to sender if sender
+            # also receives subscriptions.
+            if client.uid == sender.uid and client.receive_subscriptions:
+                continue
             self.dispatch_message(client, msg, cache)
 
     def disconnect_client(self, client):
@@ -311,7 +317,7 @@ class MQTTServer(TCPServer):
         for client in tuple(self.clients.values()):
             self.disconnect_client(client)
 
-    def handle_incoming_publish(self, msg):
+    def handle_incoming_publish(self, msg, sender):
         """
         Handles an incoming publish. This method is normally called by the
         clients a mechanism of notifying the server that there is a new message
@@ -320,16 +326,20 @@ class MQTTServer(TCPServer):
         subscribers.
 
         :param Publish msg: The Publish message to be processed.
+        :param MQTTClient sender: The client which sent the message.
         """
+        assert isinstance(sender, MQTTClient)
+
         if msg.retain is True:
-            self._retained_messages.save(msg)
+            self._retained_messages.save(msg, sender.uid)
 
         # Broadcasted messages must always be delivered with the retain flag
         # set to false. The flag should only be used when the message is sent
         # cold.
         msg.retain = False
 
-        self.broadcast_message(msg)
+        access_log.info("[.....] broadcasting payload: \"%s\"" % msg.payload)
+        self.broadcast_message(msg, sender)
 
     def enqueue_retained_message(self, client, subscription_mask):
         """
@@ -342,7 +352,12 @@ class MQTTServer(TCPServer):
         """
         assert isinstance(client, MQTTClient)
 
-        for topic, message in self._retained_messages.items():
+        for topic, (message, sender_uid) in self._retained_messages.items():
+            # XXX Packet loop restriction #4: no forwarding to sender if sender
+            # also receives subscriptions.
+            if client.uid == sender_uid and client.receive_subscriptions:
+                continue
+
             if message is not None:
                 msg_obj = Publish.from_bytes(message)
                 qos = client.get_matching_qos(msg_obj, subscription_mask)
@@ -392,13 +407,13 @@ class RetainedMessages():
     def __init__(self, retained_messages):
         self._messages = retained_messages
 
-    def save(self, msg):
+    def save(self, msg, sender_uid):
         assert isinstance(msg, Publish)
         if len(msg.payload) == 0:
             if msg.topic in self._messages:
                 del self._messages[msg.topic]
         else:
-            self._messages[msg.topic] = msg.raw_data
+            self._messages[msg.topic] = (msg.raw_data, sender_uid)
 
     def items(self):
         return self._messages.items()

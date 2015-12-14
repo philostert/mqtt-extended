@@ -29,4 +29,4 @@ except ImportError:
         sys.path.insert(0, cmd_subfolder)
     import paho.mqtt.publish as publish
 
-publish.single("paho/test/single", "boo", hostname="test.mosquitto.org")
+publish.single("paho/test/single", "boo", hostname="localhost")
