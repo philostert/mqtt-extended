@@ -41,6 +41,22 @@ class MQTTServer(TCPServer):
         self._retained_messages = RetainedMessages(self.persistence.get_retained_messages())
         assert isinstance(self._retained_messages, RetainedMessages)
 
+        self.hacked_topic_list = []
+        self.paho_partner_pair = None #Paho_Partner_Pair(external_address="m2m.eclipse.org")
+        self.uplink = None #self.paho_partner_pair.internal_client
+
+    def register_paho_partner_pair(self, pair):# pair: Paho_Partner_Pair):
+        assert isinstance(pair, Paho_Partner_Pair)
+        self.paho_partner_pair = pair
+        # and a shortcut
+        self.uplink = pair.internal_client
+
+    def has_uplink(self):
+        """ checks whether a paho_partner_pair was registered. if so shortcut uplink exists
+        :return:
+        """
+        return not self.paho_partner_pair is None
+
     def recreate_sessions(self, uids):
         access_log.info("recreating %s sessions" % len(uids))
         for uid in uids:
@@ -279,6 +295,26 @@ class MQTTServer(TCPServer):
 
                 client.publish(cache[qos])
 
+    def decide_uplink_publish(self, msg, sender_uid):
+        if not self.has_uplink():
+            return
+
+        # don't send it back where it came from
+        if self.uplink.get_uid() == sender_uid:
+            return
+
+        # TODO decide whether to publish with contents or announce without contents!
+
+        # announce only: keep track of (topic, qos) and announce only once
+
+        assert isinstance(self.uplink, MQTTClient)
+        assert isinstance(msg, Publish)
+        if not (msg.topic, msg.qos) in self.hacked_topic_list:
+            self.hacked_topic_list.append((msg.topic, msg.qos))
+            # XXX announce via shorter route; try long route to test long route in general
+            #self.uplink.send_packet(msg) # long route
+            self.paho_partner_pair.announce(msg.topic, msg.qos) # shorter route
+
     def broadcast_message(self, msg, sender_uid):
         """
         Broadcasts a message to all clients with matching subscriptions,
@@ -298,6 +334,7 @@ class MQTTServer(TCPServer):
             if client.uid == sender_uid and client.receive_subscriptions:
                 continue
             self.dispatch_message(client, msg, cache)
+        self.decide_uplink_publish(msg, sender_uid)
 
     def forward_subscription(self, topic, granted_qos, sender_uid):
         """
