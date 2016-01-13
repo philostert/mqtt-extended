@@ -8,6 +8,7 @@ from broker.access_control import SinglePasswordAuthentication, NoAuthentication
 from broker.persistence import InMemoryPersistence, RedisPersistence
 
 from broker.server import MQTTServer
+from paho.mqtt.paho_partner_pair import Paho_Partner_Pair
 
 define('rhost', 'localhost', str, "Redis host address")
 define('rport', 6379, int, "Redis host port")
@@ -89,12 +90,15 @@ def create_ssl_options(options):
 
 def start_mqtt_server(persistence, clients,
                       authentication_agent, log):
+    EXTERNAL_ADDRESS = "test.mosquitto.org"
+
     server = MQTTServer(authentication=authentication_agent,
                         persistence=persistence,
                         clients=clients,
                         ssl_options=None)
-
+    ppp = Paho_Partner_Pair()
     server.listen(1883)
+    ppp.connect(EXTERNAL_ADDRESS)
     print("listening port 1883")
     log.info("listening port 1883")
 

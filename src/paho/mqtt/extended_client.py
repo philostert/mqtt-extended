@@ -29,7 +29,7 @@ MQTT_ERR_SUCCESS = 0
 MQTT_ERR_PROTOCOL = 2
 
 class Extended_Client(mqtt.Client):
-    def __init__(self, partner_pair, client_id="", clean_session=False, userdata=None):#, protocol=MQTTv31):
+    def __init__(self, partner_pair, client_id="", clean_session=True, userdata=None):#, protocol=MQTTv31):
         super().__init__(client_id, clean_session, userdata)#, protocol)
         self.local_interface = partner_pair
 
