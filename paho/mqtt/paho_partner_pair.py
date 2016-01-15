@@ -60,8 +60,12 @@ class Paho_Partner_Pair():
         self.external_client.connect(external_address)
         self.external_client.loop_start() # starts a Thread
 
-    def announce(self, topic, qos):
-        self.external_client.publish(topic, payload=None, qos=qos, retain=True)
+    # def announce(self, topic, qos):
+    #    self.external_client.publish(topic, payload=None, qos=qos, retain=True)
+
+    def announce(self, msg):
+        self.external_client.publish(self, topic=msg.topic,payload=msg.payload,qos=msg.qos,retain=True)
+        print("[.....] announcing topic(%s) : payload(%s) : qos(%d)" % msg.topic % msg.payload %msg.qos )
 
     def pass_packet_to_partner(self, binary_packet : bytes, origin_id):
         if origin_id == self.external_client._client_id:

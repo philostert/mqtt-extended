@@ -5,7 +5,6 @@ from tornado.log import access_log
 from tornado import gen
 from logging import getLogger
 import toro
-
 from broker import MQTTConstants
 from broker.access_control import NoAuthentication, Authorization
 from broker.client import MQTTClient
@@ -14,7 +13,7 @@ from broker.messages import Publish, Connect, Connack, Subscribe
 from broker.connection import MQTTConnection
 from broker.factory import MQTTMessageFactory
 from broker.persistence import InMemoryPersistence
-
+from paho.mqtt.paho_partner_pair import Paho_Partner_Pair
 
 client_logger = getLogger('activity.clients')
 
@@ -26,6 +25,7 @@ class MQTTServer(TCPServer):
     the known client sessions and dispatching messages based on subscription
     matching.
     """
+
     def __init__(self, authentication=None, persistence=None, clients=None,
                  ssl_options=None):
         super().__init__(ssl_options=ssl_options)
@@ -42,10 +42,10 @@ class MQTTServer(TCPServer):
         assert isinstance(self._retained_messages, RetainedMessages)
 
         self.hacked_topic_list = []
-        self.paho_partner_pair = None #Paho_Partner_Pair(external_address="m2m.eclipse.org")
-        self.uplink = None #self.paho_partner_pair.internal_client
+        self.paho_partner_pair = None  # Paho_Partner_Pair(external_address="m2m.eclipse.org")
+        self.uplink = None  # self.paho_partner_pair.internal_client
 
-    def register_paho_partner_pair(self, pair):# pair: Paho_Partner_Pair):
+    def register_paho_partner_pair(self, pair):  # pair: Paho_Partner_Pair):
         assert isinstance(pair, Paho_Partner_Pair)
         self.paho_partner_pair = pair
         # and a shortcut
@@ -286,7 +286,7 @@ class MQTTServer(TCPServer):
 
             # If the client is not connected, drop QoS 0 messages
             if client.is_connected() or \
-                    qos > MQTTConstants.AT_MOST_ONCE:
+                            qos > MQTTConstants.AT_MOST_ONCE:
 
                 if qos not in cache:
                     msg_copy = msg.copy()
@@ -296,12 +296,12 @@ class MQTTServer(TCPServer):
                 client.publish(cache[qos])
 
     def decide_uplink_publish(self, msg, sender_uid):
+        print("CALLED DECIDE UPLINK PUBLISH")
         if not self.has_uplink():
             return
-
         # don't send it back where it came from
-        if self.uplink.get_uid() == sender_uid:
-            return
+        # if self.uplink.get_uid() == sender_uid:
+        #    return
 
         # TODO decide whether to publish with contents or announce without contents!
 
@@ -312,8 +312,9 @@ class MQTTServer(TCPServer):
         if not (msg.topic, msg.qos) in self.hacked_topic_list:
             self.hacked_topic_list.append((msg.topic, msg.qos))
             # XXX announce via shorter route; try long route to test long route in general
-            #self.uplink.send_packet(msg) # long route
-            self.paho_partner_pair.announce(msg.topic, msg.qos) # shorter route
+            # self.uplink.send_packet(msg) # long route
+            # self.paho_partner_pair.announce(msg.topic, msg.qos) # shorter route
+            self.paho_partner_pair.announce(msg)  # shorter route
 
     def broadcast_message(self, msg, sender_uid):
         """
@@ -334,6 +335,7 @@ class MQTTServer(TCPServer):
             if client.uid == sender_uid and client.receive_subscriptions:
                 continue
             self.dispatch_message(client, msg, cache)
+        print("CALL DECIDE UPLINK PUBLISH")
         self.decide_uplink_publish(msg, sender_uid)
 
     def forward_subscription(self, topic, granted_qos, sender_uid):
@@ -347,15 +349,16 @@ class MQTTServer(TCPServer):
         # TODO rebuild package with subscription intents; think about qos
         msg = Subscribe()
 
-        #recipients = [c for c in self.clients if c.receive_subscriptions and not c.uid == sender_uid]
-        recipients = filter(lambda client: client.receive_subscriptions and not client.uid == sender_uid, self.clients.values())
+        # recipients = [c for c in self.clients if c.receive_subscriptions and not c.uid == sender_uid]
+        recipients = filter(lambda client: client.receive_subscriptions and not client.uid == sender_uid,
+                            self.clients.values())
         for client in recipients:
             client.send_packet(msg)
 
         # TODO send it to "uplink" message broker if it did not come from there
-        if sender_uid: # XXX uplink is not a client, assume sender_uid would be None
+        if sender_uid:  # XXX uplink is not a client, assume sender_uid would be None
             pass
-            #Uplink.send_packet(msg)
+            # Uplink.send_packet(msg)
 
     def disconnect_client(self, client):
         """
@@ -396,7 +399,7 @@ class MQTTServer(TCPServer):
         # cold.
         msg.retain = False
 
-        access_log.info("[.....] broadcasting payload: \"%s\"" % msg.payload)
+        # access_log.info("[.....] broadcasting payload: \"%s\"" % msg.payload)
         self.broadcast_message(msg, sender_uid)
 
     def enqueue_retained_message(self, client, subscription_mask):
