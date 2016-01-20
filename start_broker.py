@@ -57,15 +57,15 @@ class OsSignalHandler():
 def create_redis_persistence(options, log):
     import redis
     redis_client = redis.StrictRedis(
-        host=options.rhost,
-        port=options.rport,
-        password=options.rpassword
+            host=options.rhost,
+            port=options.rport,
+            password=options.rpassword
     )
 
     print("[option] Using redis at (%s, %d)" %
           (options.rhost, options.rport))
     log.info("[option] Using redis at (%s, %d)" %
-          (options.rhost, options.rport))
+             (options.rhost, options.rport))
 
     return RedisPersistence(redis_client)
 
@@ -76,7 +76,7 @@ def create_ssl_options(options):
         ssl_options = {
             "ssl_version": ssl.PROTOCOL_TLSv1,
             "cert_reqs": ssl.CERT_NONE,
-            "keyfile": options.sslkey, 
+            "keyfile": options.sslkey,
             "certfile": options.sslcert,
         }
         print("[option] Using SSL/TLS")
@@ -192,6 +192,6 @@ def main():
     print("MQTT-Broker Stopped")
     log.info('broker stopped')
 
+
 parse_command_line()
 main()
-

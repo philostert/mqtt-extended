@@ -106,13 +106,13 @@ class MQTTServer(TCPServer):
     def create_client(self, connection, msg, authorization):
         client_persistence = self.persistence.get_for_client(msg.client_uid)
         client = MQTTClient(
-            server=self,
-            connection=connection,
-            authorization=authorization,
-            uid=msg.client_uid,
-            clean_session=msg.clean_session,
-            keep_alive=msg.keep_alive,
-            persistence=client_persistence,
+                server=self,
+                connection=connection,
+                authorization=authorization,
+                uid=msg.client_uid,
+                clean_session=msg.clean_session,
+                keep_alive=msg.keep_alive,
+                persistence=client_persistence,
         )
 
         access_log.info("[uid: %s] new session created"
@@ -121,17 +121,17 @@ class MQTTServer(TCPServer):
 
     def recreate_client(self, client_uid):
         return MQTTClient(
-            server=self,
-            connection=None,
-            uid=client_uid,
-            clean_session=False,
-            persistence=self.persistence.get_for_client(client_uid)
+                server=self,
+                connection=None,
+                uid=client_uid,
+                clean_session=False,
+                persistence=self.persistence.get_for_client(client_uid)
         )
 
     def update_client(self, connection, msg, authorization, client):
         client.update_configuration(
-            clean_session=msg.clean_session,
-            keep_alive=msg.keep_alive
+                clean_session=msg.clean_session,
+                keep_alive=msg.keep_alive
         )
         client.update_connection(connection)
         client.update_authorization(authorization)
@@ -157,10 +157,10 @@ class MQTTServer(TCPServer):
         else:
             will_payload = None
         client.configure_last_will(
-            topic=connect_msg.will_topic,
-            payload=will_payload,
-            qos=connect_msg.will_qos,
-            retain=connect_msg.will_retain
+                topic=connect_msg.will_topic,
+                payload=will_payload,
+                qos=connect_msg.will_qos,
+                retain=connect_msg.will_retain
         )
 
     @gen.coroutine
@@ -184,7 +184,7 @@ class MQTTServer(TCPServer):
             yield self.write_connack_message(connection, msg, authorization)
 
             context.client = client = self.get_or_create_client(
-                connection, msg, authorization)
+                    connection, msg, authorization)
 
             client.start()
             self.add_client(client)
@@ -209,8 +209,8 @@ class MQTTServer(TCPServer):
                                'without clean session')
 
         authorization = yield self.authentication.authenticate(
-            msg.client_uid,
-            msg.username, msg.passwd)
+                msg.client_uid,
+                msg.username, msg.passwd)
 
         assert isinstance(authorization, Authorization)
         if authorization.is_fully_authorized():
@@ -295,26 +295,35 @@ class MQTTServer(TCPServer):
 
                 client.publish(cache[qos])
 
+    """
+    1. Write to hacked topic list
+    2. Check if uplink is set
+    3. Check for origin
+    4. Assert that all types fit
+    5. Send new topic to upstream
+    """
+
     def decide_uplink_publish(self, msg, sender_uid):
-        print("CALLED DECIDE UPLINK PUBLISH")
+        # 1.
+        if not (msg.topic, msg.qos) in self.hacked_topic_list:
+            print("Added Topic to Publishlist: {} QoS: {} Payload: {}".format(msg.topic, msg.qos, msg.payload))
+            self.hacked_topic_list.append((msg.topic, msg.qos))
+        # 2.
         if not self.has_uplink():
             return
-        # don't send it back where it came from
-        # if self.uplink.get_uid() == sender_uid:
-        #    return
-
+        # 3. don't send it back where it came from
+        if self.uplink.get_uid() == sender_uid:
+            return
         # TODO decide whether to publish with contents or announce without contents!
-
         # announce only: keep track of (topic, qos) and announce only once
-
+        # 4.
         assert isinstance(self.uplink, MQTTClient)
         assert isinstance(msg, Publish)
-        if not (msg.topic, msg.qos) in self.hacked_topic_list:
-            self.hacked_topic_list.append((msg.topic, msg.qos))
-            # XXX announce via shorter route; try long route to test long route in general
-            # self.uplink.send_packet(msg) # long route
-            # self.paho_partner_pair.announce(msg.topic, msg.qos) # shorter route
-            self.paho_partner_pair.announce(msg)  # shorter route
+        # 5.
+        # XXX announce via shorter route; try long route to test long route in general
+        # self.uplink.send_packet(msg) # long route
+        # self.paho_partner_pair.announce(msg.topic, msg.qos) # shorter route
+        self.paho_partner_pair.announce(msg)  # shorter route
 
     def broadcast_message(self, msg, sender_uid):
         """
@@ -335,7 +344,7 @@ class MQTTServer(TCPServer):
             if client.uid == sender_uid and client.receive_subscriptions:
                 continue
             self.dispatch_message(client, msg, cache)
-        print("CALL DECIDE UPLINK PUBLISH")
+        # print("CALL DECIDE UPLINK PUBLISH")
         self.decide_uplink_publish(msg, sender_uid)
 
     def forward_subscription(self, topic, granted_qos, sender_uid):
@@ -343,6 +352,22 @@ class MQTTServer(TCPServer):
         :param topic_qos: A list of topic-qos-pairs to forward.
         :param sender_uid: sender's ID, don't send subscription back there!
         :return: FIXME (not specified yet)
+        """
+        """
+        if not (topic, granted_qos) in self.hacked_topic_list:
+            access_log.info("[.....] forwarding subscription from: \"%s\"" % sender_uid)
+            # TODO rebuild package with subscription intents; think about qos
+            msg = Subscribe()
+
+            # recipients = [c for c in self.clients if c.receive_subscriptions and not c.uid == sender_uid]
+            recipients = filter(lambda client: client.receive_subscriptions and not client.uid == sender_uid,
+                            self.clients.values())
+            for client in recipients:
+                client.send_packet(msg)
+            # TODO send it to "uplink" message broker if it did not come from there
+            if sender_uid:  # XXX uplink is not a client, assume sender_uid would be None
+                pass
+                # Uplink.send_packet(msg)
         """
         access_log.info("[.....] forwarding subscription from: \"%s\"" % sender_uid)
 
