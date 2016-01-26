@@ -37,6 +37,7 @@ class IncomingAction(Action):
 
 class IncomingPublish(IncomingAction):
     def run(self):
+        print("PUBLISH FROM {}: {} {} {}".format(self._client.uid, self.msg.topic, self.msg.payload, self.msg.qos))
         is_dup = False
         if self.qos is MQTTConstants.EXACTLY_ONCE:
             if self.msg.id in self._client.incoming_packet_ids:
@@ -65,7 +66,7 @@ class IncomingSubscribe(IncomingAction):
         self.write_to_client(m)
         # XXX escalate subscriptions
         self._client.server.forward_subscription(topic, granted_qos, sender_uid=self._client.uid)
-
+        print("SUBSCRIBING {} to: {} {}".format(self._client.uid, topic, qos))
 
 class IncomingDisconnect(IncomingAction):
     def run(self):
