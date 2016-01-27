@@ -1,5 +1,5 @@
 from broker import MQTTConstants
-from broker.messages import Pingresp, Puback,  Suback, Unsuback, Pubrel, Pubrec, Pubcomp
+from broker.messages import Pingresp, Puback, Suback, Unsuback, Pubrel, Pubrec, Pubcomp
 
 
 class Action():
@@ -68,6 +68,7 @@ class IncomingSubscribe(IncomingAction):
         self._client.server.forward_subscription(topic, granted_qos, sender_uid=self._client.uid)
         print("SUBSCRIBING {} to: {} {}".format(self._client.uid, topic, qos))
 
+
 class IncomingDisconnect(IncomingAction):
     def run(self):
         self._client.disconnect()
@@ -126,8 +127,12 @@ class OutgoingAction(Action):
 
 class OutgoingPublish(OutgoingAction):
     def get_data(self):
+
+        print("PUBLISH TO {} {} {} ".format(self._client.uid, self.msg.topic, self.msg.payload))
         if self.qos > MQTTConstants.AT_MOST_ONCE:
             self.msg.dup = self._client.outgoing_queue.is_sent(self.msg.id)
+            #print("PUBLISH TO {} {} {} DUPLICATE: {}".format(self._client.uid, self.msg.topic, self.msg.payload,
+            #                                              self.msg.dup))
 
         if self.qos == MQTTConstants.EXACTLY_ONCE:
             if self._client.outgoing_queue.is_pubconf(self.msg.id):

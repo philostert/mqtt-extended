@@ -269,6 +269,7 @@ class MQTTClient():
         """
         try:
             self.outgoing_queue.put_publish(msg)
+            self.logger.error('[uid: %s] Send publish packet to Subscriber with topic %s' % (self.uid, msg.topic))
         except PacketIdsDepletedError:
             self.logger.error('[uid: %s] Packet IDs depleted' % self.uid)
 
@@ -343,7 +344,8 @@ class MQTTClient():
 
             else:
                 qos = 0x80
-
+        if "#" in subscription_mask:
+            print("SUBSCRIBING TO: {}".format(subscription_mask))
         return qos
 
     def unsubscribe(self, topics):

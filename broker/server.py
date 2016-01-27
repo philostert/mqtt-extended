@@ -327,7 +327,8 @@ class MQTTServer(TCPServer):
         # XXX announce via shorter route; try long route to test long route in general
         # self.uplink.send_packet(msg) # long route
         # self.paho_partner_pair.announce(msg.topic, msg.qos) # shorter route
-        self.paho_partner_pair.announce(msg)  # shorter route
+        self.paho_partner_pair.announce(msg)
+        # shorter route
 
     def broadcast_message(self, msg, sender_uid):
         """
@@ -443,6 +444,8 @@ class MQTTServer(TCPServer):
         :param str subscription_mask: The subscription mask to match the
           messages against.
         """
+
+        # print(self._retained_messages._messages)
         assert isinstance(client, MQTTClient)
 
         for topic, (message, sender_uid) in self._retained_messages.items():
