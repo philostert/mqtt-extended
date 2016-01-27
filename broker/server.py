@@ -447,7 +447,8 @@ class MQTTServer(TCPServer):
 
         # print(self._retained_messages._messages)
         assert isinstance(client, MQTTClient)
-
+        for e in self._retained_messages.items():
+            print("INFO: {}".format(e))
         for topic, (message, sender_uid) in self._retained_messages.items():
             # XXX Packet loop restriction #4: no forwarding to sender if sender
             # also receives subscriptions.
