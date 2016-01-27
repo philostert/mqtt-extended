@@ -340,6 +340,11 @@ class MQTTServer(TCPServer):
         assert isinstance(msg, Publish)
         assert isinstance(sender_uid, str)
 
+        # Broadcasted messages must always be delivered with the retain flag
+        # set to false to clients which are plain clients (non-brokers)
+        msg_reduced = msg.copy()
+        msg_reduced.retain = False
+
         cache = {}
 
         for client in self.clients.values():
@@ -347,7 +352,10 @@ class MQTTServer(TCPServer):
             # also receives subscriptions.
             if client.uid == sender_uid and client.receive_subscriptions:
                 continue
-            self.dispatch_message(client, msg, cache)
+            if client.is_broker():
+                self.dispatch_message(client, msg, cache)
+            else:
+                self.dispatch_message(client, msg_reduced, cache)
         # print("CALL DECIDE UPLINK PUBLISH")
         self.decide_uplink_publish(msg, sender_uid)
 
@@ -422,11 +430,6 @@ class MQTTServer(TCPServer):
 
         if msg.retain is True:
             self._retained_messages.save(msg, sender_uid)
-
-        # Broadcasted messages must always be delivered with the retain flag
-        # set to false. The flag should only be used when the message is sent
-        # cold.
-        msg.retain = False
 
         # access_log.info("[.....] broadcasting payload: \"%s\"" % msg.payload)
         self.broadcast_message(msg, sender_uid)
