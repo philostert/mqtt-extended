@@ -243,6 +243,11 @@ class MQTTServer(TCPServer):
         """
         assert isinstance(client, MQTTClient)
         self.clients[client.uid] = client
+        # verbosity... testing
+        string = "just a client"
+        if (client.is_broker()):
+            string = "a broker"
+        print("client %s is %s" % (client.uid, string))
 
     def remove_client(self, client):
         """

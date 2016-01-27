@@ -41,6 +41,9 @@ class MQTTClient():
     :param int keep_alive: The keep alive interval, in seconds.
     :param ClientPersistenceBase persistence: An object that provides persistence
     """
+
+    broker_re = re.compile(r'^(broker|uplink)', re.IGNORECASE) # matched against 'uid'
+
     def __init__(self, server, connection, authorization=None,
                  uid=None, clean_session=False,
                  keep_alive=60, persistence=None, receive_subscriptions=None):
@@ -77,6 +80,9 @@ class MQTTClient():
         s = self.keep_alive if self.keep_alive > 0 else 60
         return timedelta(seconds=s)
 
+    def is_broker(self):
+        """boolean whether this client claims to be a broker"""
+        return not not MQTTClient.broker_re.match(self.uid)
 
     def update_connection(self, connection):
         """
