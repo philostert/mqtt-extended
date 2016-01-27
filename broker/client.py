@@ -42,7 +42,7 @@ class MQTTClient():
     :param ClientPersistenceBase persistence: An object that provides persistence
     """
 
-    broker_re = re.compile(r'^(broker|uplink)', re.IGNORECASE) # matched against 'uid'
+    broker_re = re.compile(r'^(broker|uplink)', re.IGNORECASE)  # matched against 'uid'
 
     def __init__(self, server, connection, authorization=None,
                  uid=None, clean_session=False,
@@ -158,7 +158,7 @@ class MQTTClient():
         """
         return self._connected.is_set()
 
-    def configure_last_will(self,  topic, payload, qos, retain=False):
+    def configure_last_will(self, topic, payload, qos, retain=False):
         """
         Configures a message to be send as the client's last will. This message
         will be send when the connected is disconnected by a connection timeout,
@@ -195,8 +195,8 @@ class MQTTClient():
                                   (self.uid, type(msg)))
 
             self.logger.debug(
-                "[uid: %s] Will be disconnect due to invalid message" %
-                self.uid
+                    "[uid: %s] Will be disconnect due to invalid message" %
+                    self.uid
             )
 
             self.disconnect()
@@ -328,7 +328,7 @@ class MQTTClient():
             return 0x80
 
         new_subscription = subscription_mask not in self.subscriptions or \
-            self.subscriptions.qos(subscription_mask) != qos
+                           self.subscriptions.qos(subscription_mask) != qos
 
         if not self.authorization.is_subscription_allowed(subscription_mask):
             self.logger.warn("[uid: %s] is not allowed to subscribe on %s" %
@@ -338,6 +338,7 @@ class MQTTClient():
 
         elif new_subscription:
             ereg = MQTTUtils.convert_to_ereg(subscription_mask)
+            print("EREG IS: {}".format(ereg))
             if ereg is not None:
                 self.subscriptions.add(subscription_mask, qos, re.compile(ereg))
                 self.server.enqueue_retained_message(self, subscription_mask)
@@ -478,7 +479,7 @@ class client_process_context(ContextDecorator):
 
         elif exc_type == toro.Timeout:
             self.client.logger.debug("[uid: %s] _process_incoming_messages: timed out" %
-                                     (self.client.uid, ))
+                                     (self.client.uid,))
             self.client._on_connection_timeout(self.connection)
 
         elif exc_type == TypeFactoryError:
@@ -490,8 +491,8 @@ class client_process_context(ContextDecorator):
 
         elif isinstance(exc_val, Exception):
             self.client.logger.exception(
-                "[uid: %s] Unhandled exception on client_process_context: %s" %
-                (self.client.uid, str(exc_val))
+                    "[uid: %s] Unhandled exception on client_process_context: %s" %
+                    (self.client.uid, str(exc_val))
             )
 
         return True  # suppress the raised exception
@@ -501,6 +502,7 @@ class ClientSubscriptions():
     """
     Encapsulates subscription persistence access and mask regex caching.
     """
+
     def __init__(self, subscriptions):
         self._subscriptions = subscriptions
 
@@ -546,6 +548,7 @@ class OutgoingQueue():
     This class controls packets to be delivered to the remote client.
     It encapsulates the logic to send packets and start new publish flows.
     """
+
     def __init__(self, outgoing_publishes):
         self.max_inflight = 1
 
