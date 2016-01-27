@@ -96,14 +96,15 @@ class MQTTUtils:
 
     @classmethod
     def convert_to_ereg(cls, subscription_mask, allow_wildcards=False):
+        # FIXME: is allow_wildcards badly namend for allowing literal '+' characters in topic names?
         if cls.subscription_is_valid(subscription_mask):
             ereg = "^%s$" % subscription_mask
             if allow_wildcards:
                 ereg = re.sub("(/?)\+(/?)", "\g<1>([^\x00#/]+|\+|)\g<2>", ereg)
-                ereg = re.sub("/#\$", "(/.*$|$)", ereg)
+                ereg = re.sub("(/?)#\$", "(\g<1>.*$|$)", ereg)
             else:
                 ereg = re.sub("(/?)\+(/?)", "\g<1>([^\x00#+/]+|)\g<2>", ereg)
-                ereg = re.sub("/#\$", "(/[^\x00#+]*$|$)", ereg)
+                ereg = re.sub("(/?)#\$", "(\g<1>[^\x00#+]*$|$)", ereg)
             return ereg
 
     @classmethod
