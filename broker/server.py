@@ -115,8 +115,12 @@ class MQTTServer(TCPServer):
                 persistence=client_persistence,
         )
 
-        access_log.info("[uid: %s] new session created"
-                        % client.uid)
+        # verbosity... testing
+        type = "plain-client"
+        if (client.is_broker()):
+            type = "broker"
+        access_log.info("[uid: %s] new session created (client type: %s)"
+                        % (client.uid, type))
         return client
 
     def recreate_client(self, client_uid):
@@ -243,11 +247,6 @@ class MQTTServer(TCPServer):
         """
         assert isinstance(client, MQTTClient)
         self.clients[client.uid] = client
-        # verbosity... testing
-        string = "just a client"
-        if (client.is_broker()):
-            string = "a broker"
-        print("client %s is %s" % (client.uid, string))
 
     def remove_client(self, client):
         """
