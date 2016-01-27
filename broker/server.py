@@ -349,17 +349,13 @@ class MQTTServer(TCPServer):
         cache = {}
 
         for client in self.clients.values():
-            # print("CLIENT: {} ; {}".format(client.uid, msg.topic))
             # XXX Packet loop restriction #4: no forwarding to sender if sender
             # also receives subscriptions.
             if client.uid == sender_uid and client.receive_subscriptions:
-                # print("SKIP CLIENT")
                 continue
             if client.is_broker():
-                # print("{} IS BROKER".format(client.uid))
                 self.dispatch_message(client, msg, cache)
             else:
-                # print("{} IS CLIENT".format(client.uid))
                 self.dispatch_message(client, msg_reduced, cache)
         # print("CALL DECIDE UPLINK PUBLISH")
         self.decide_uplink_publish(msg, sender_uid)
@@ -451,9 +447,8 @@ class MQTTServer(TCPServer):
 
         # print(self._retained_messages._messages)
         assert isinstance(client, MQTTClient)
-        # for e in self._retained_messages.items():
-        #    print("Info: {}".format(e))
-        for (topic, (message, sender_uid)) in self._retained_messages.items():
+
+        for topic, (message, sender_uid) in self._retained_messages.items():
             # XXX Packet loop restriction #4: no forwarding to sender if sender
             # also receives subscriptions.
             if client.uid == sender_uid and client.receive_subscriptions:
