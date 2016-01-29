@@ -89,16 +89,17 @@ def create_ssl_options(options):
 
 
 def start_mqtt_server(persistence, clients,
-                      authentication_agent, log):
-    EXTERNAL_ADDRESS = "test.mosquitto.org"
+                      authentication_agent, log, listen_port=1883, EXTERNAL_ADDRESS=None, EXTERNAL_PORT=1883):
+    #EXTERNAL_ADDRESS = "test.mosquitto.org"
 
     server = MQTTServer(authentication=authentication_agent,
                         persistence=persistence,
                         clients=clients,
                         ssl_options=None)
-    ppp = Paho_Partner_Pair()
-    server.listen(1883)
-    ppp.connect(EXTERNAL_ADDRESS)
+    server.listen(listen_port)
+    if EXTERNAL_ADDRESS is not None:
+        ppp = Paho_Partner_Pair()
+        ppp.connect(EXTERNAL_ADDRESS, EXTERNAL_PORT)
     print("listening port 1883")
     log.info("listening port 1883")
 

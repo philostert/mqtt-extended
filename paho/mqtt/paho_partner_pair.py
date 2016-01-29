@@ -57,12 +57,12 @@ class Paho_Partner_Pair():
         self.internal_client.on_publish = on_publish
         self.internal_client.on_subscribe = on_subscribe
 
-    def connect(self, external_address):
+    def connect(self, external_address, port):
         internal_address = "127.0.0.1"
         self.internal_client.connect(internal_address)
         self.internal_client.loop_start()  # starts a Thread
 
-        self.external_client.connect(external_address)
+        self.external_client.connect(external_address, port)
         self.external_client.loop_start()  # starts a Thread
 
     # def announce(self, topic, qos):
