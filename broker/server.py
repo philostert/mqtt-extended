@@ -282,6 +282,8 @@ class MQTTServer(TCPServer):
         :param dict cache: A dict that will be used for raw data caching.
           Defaults to a empty dictionary if None.
         """
+        print("dispatching Publish to client_id: %s of class %s" % (client.uid, client.__class__))
+
         assert isinstance(msg, Publish)
         assert isinstance(client, MQTTClient)
         assert client.uid in self.clients
@@ -301,6 +303,18 @@ class MQTTServer(TCPServer):
                     cache[qos] = msg_copy
 
                 client.publish(cache[qos])
+
+        # TODO remove all code below - this is just a test of the forwarding method
+        if "uplink" == client.uid:
+            print("SEND TO UPLINK - ALWAYS ALL! TESTING")
+            qos = 0
+            if qos not in cache:
+                msg_copy = msg.copy()
+                msg_copy.retain = True # retain!!!
+                msg_copy.qos = qos
+                cache[qos] = msg_copy
+
+            client.publish(cache[qos])
 
     """
     1. Write to hacked topic list

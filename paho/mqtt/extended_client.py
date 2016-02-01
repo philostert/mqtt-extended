@@ -1,8 +1,7 @@
 import paho.mqtt.client as mqtt
-# FIXME from broker.factory import MQTTMessageFactory
-
 # Message types
 from broker.factory import MQTTMessageFactory
+from broker.util import MQTTUtils
 
 CONNECT = 0x10
 CONNACK = 0x20
@@ -30,6 +29,8 @@ MQTT_LOG_DEBUG = 0x10
 MQTT_ERR_SUCCESS = 0
 MQTT_ERR_PROTOCOL = 2
 
+import sys
+
 class Extended_Client(mqtt.Client):
     def __init__(self, partner_pair, client_id="", clean_session=True, userdata=None):#, protocol=MQTTv31):
         super().__init__(client_id, clean_session, userdata)#, protocol)
@@ -41,11 +42,19 @@ class Extended_Client(mqtt.Client):
 
     def enqueue_packet(self, binary_packet : bytes):
         print("enqueueing binary packet")
+        print(binary_packet)
         # decode
         # FIXME import Errors with Message Factory
 
-        obj = MQTTMessageFactory.make(binary_packet)
-        print("enqueueing from %s . try forward" % obj.__class__.__name__)
+        try:
+            print(type(binary_packet))
+            obj = MQTTMessageFactory.make(binary_packet)
+        except:
+            e = sys.exc_info()[0]
+            print(e)
+
+        print("foo")
+        print("enqueueing from %s . try forward" % obj.__class__)
         cmd = obj.type << 4
         mid = obj.id
         qos = obj.qos
@@ -96,15 +105,23 @@ class Extended_Client(mqtt.Client):
 
     def _handle_subscribe(self):
         # TODO decode packet and send SUBACK
-
         return self._forward_to_partner()
 
     def _handle_unsubscribe(self):
         # TODO decode packet and send UNSUBACK
-
         return self._forward_to_partner()
 
     def _forward_to_partner(self):
         print("ppp: forwarding packet to partner")
-        self.local_interface.pass_packet_to_partner(self._in_packet["packet"], self._client_id)
+        # paho has cut of some bytes. We are missing 'command' and 'remaining_length':
+        # TODO append and concatenate it again.
+        b_command = self._in_packet['command_byte'] #b''#MQTTUtils.encode_value(self._in_packet['command'])
+        b_length = MQTTUtils.encode_length(self._in_packet['remaining_length'])
+        b_rest_of_packet = self._in_packet["packet"]
+
+        b_concat = b_command + b_length + b_rest_of_packet
+        print("forwarded content is of type: %s" % (b_concat.__class__))
+        print("forwarded content is: %s" % (b_concat))
+
+        self.local_interface.pass_packet_to_partner(b_concat, self._client_id)
         return MQTT_ERR_SUCCESS

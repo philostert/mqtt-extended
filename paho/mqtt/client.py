@@ -1415,6 +1415,7 @@ class Client(object):
             else:
                 if len(command) == 0:
                     return 1
+                self._in_packet['command_byte'] = command
                 command = struct.unpack("!B", command)
                 self._in_packet['command'] = command[0]
 

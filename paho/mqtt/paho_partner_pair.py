@@ -78,13 +78,13 @@ class Paho_Partner_Pair():
         #                                                                           'FIXME'))
         # TODO test other way:
         binary_packet = msg.raw_data
-        self.external_client.enqueue_packet(binary_packet)
+        #self.external_client.enqueue_packet(binary_packet)
 
     def pass_packet_to_partner(self, binary_packet: bytes, origin_id):
         if origin_id == self.external_client._client_id:
-            self.internal_client._client_id.enqueue_packet(binary_packet)
+            self.internal_client.enqueue_packet(binary_packet)
         elif origin_id == self.internal_client._client_id:
-            self.external_client._client_id.enqueue_packet(binary_packet)
+            self.external_client.enqueue_packet(binary_packet)
 
     def get_partner(self, my_id):
         if my_id == self.external_client._client_id:
