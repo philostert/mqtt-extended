@@ -99,9 +99,10 @@ def start_mqtt_server(persistence, clients,
     server.listen(listen_port)
     if EXTERNAL_ADDRESS is not None:
         ppp = Paho_Partner_Pair()
+        server.register_paho_partner_pair(ppp)
         ppp.connect(EXTERNAL_ADDRESS, EXTERNAL_PORT)
-    print("listening port 1883")
-    log.info("listening port 1883")
+    print("listening port %s" % listen_port)
+    log.info("listening port %s" % listen_port)
 
     return server
 

@@ -69,11 +69,12 @@ class Paho_Partner_Pair():
     #    self.external_client.publish(topic, payload=None, qos=qos, retain=True)
 
     def announce(self, msg):
-        # print("[.....] announcing topic(%s) : payload(%s) : qos(%d)" % msg.topic % msg.payload % msg.qos)
+        print("[.....] announcing topic(%s) : payload(%s) : qos(%d)" % msg.topic % msg.payload % msg.qos)
         self.external_client.publish(self, topic=msg.topic, payload=msg.payload, qos=msg.qos, retain=True)
         # FIXME find out how to get the upstream broker into the printout; Announce with/without payload?
         print("[.....] announcing topic({}) : payload({}) : qos({}) TO {})".format(msg.topic, msg.payload, msg.qos,
                                                                                    'FIXME'))
+        # TODO test other way: binary_packet = msg.
 
     def pass_packet_to_partner(self, binary_packet: bytes, origin_id):
         if origin_id == self.external_client._client_id:

@@ -13,6 +13,7 @@ from broker.messages import Publish, Connect, Connack, Subscribe
 from broker.connection import MQTTConnection
 from broker.factory import MQTTMessageFactory
 from broker.persistence import InMemoryPersistence
+from paho.mqtt.extended_client import Extended_Client
 from paho.mqtt.paho_partner_pair import Paho_Partner_Pair
 
 client_logger = getLogger('activity.clients')
@@ -55,7 +56,9 @@ class MQTTServer(TCPServer):
         """ checks whether a paho_partner_pair was registered. if so shortcut uplink exists
         :return:
         """
-        return not self.paho_partner_pair is None
+        if self.paho_partner_pair is None:
+            return False
+        return True
 
     def recreate_sessions(self, uids):
         access_log.info("recreating %s sessions" % len(uids))
@@ -314,6 +317,7 @@ class MQTTServer(TCPServer):
             self.hacked_topic_list.append((msg.topic, msg.qos))
         # 2.
         if not self.has_uplink():
+            print("cancel: decide_uplink_publish - has no uplink!")
             return
         # 3. don't send it back where it came from
         if self.uplink.get_uid() == sender_uid:
@@ -321,12 +325,13 @@ class MQTTServer(TCPServer):
         # TODO decide whether to publish with contents or announce without contents!
         # announce only: keep track of (topic, qos) and announce only once
         # 4.
-        assert isinstance(self.uplink, MQTTClient)
+        assert isinstance(self.uplink, Extended_Client)
         assert isinstance(msg, Publish)
         # 5.
         # XXX announce via shorter route; try long route to test long route in general
         # self.uplink.send_packet(msg) # long route
         # self.paho_partner_pair.announce(msg.topic, msg.qos) # shorter route
+        print("Announcing %s" % msg.topic)
         self.paho_partner_pair.announce(msg)
         # shorter route
 
@@ -357,7 +362,7 @@ class MQTTServer(TCPServer):
                 self.dispatch_message(client, msg, cache)
             else:
                 self.dispatch_message(client, msg_reduced, cache)
-        # print("CALL DECIDE UPLINK PUBLISH")
+        print("CALL DECIDE UPLINK PUBLISH")
         self.decide_uplink_publish(msg, sender_uid)
 
     def forward_subscription(self, topic, granted_qos, sender_uid):
