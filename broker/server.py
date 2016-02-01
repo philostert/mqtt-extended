@@ -311,6 +311,8 @@ class MQTTServer(TCPServer):
     """
 
     def decide_uplink_publish(self, msg, sender_uid):
+        # 0.
+        msg.retain = True
         # 1.
         if not (msg.topic, msg.qos) in self.hacked_topic_list:
             print("Added Topic to Publishlist: {} QoS: {} Payload: {}".format(msg.topic, msg.qos, msg.payload))
