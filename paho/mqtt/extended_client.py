@@ -2,6 +2,8 @@ import paho.mqtt.client as mqtt
 # FIXME from broker.factory import MQTTMessageFactory
 
 # Message types
+from broker.factory import MQTTMessageFactory
+
 CONNECT = 0x10
 CONNACK = 0x20
 PUBLISH = 0x30
@@ -37,11 +39,11 @@ class Extended_Client(mqtt.Client):
     def get_uid(self):
         return self._client_id
 
-    def enque_packet(self, binary_packet : bytes):
+    def enqueue_packet(self, binary_packet : bytes):
         print("enqueueing binary packet")
         # decode
         # FIXME import Errors with Message Factory
-        """
+
         obj = MQTTMessageFactory.make(binary_packet)
         print("enqueueing from %s . try forward" % obj.__class__.__name__)
         cmd = obj.type << 4
@@ -51,6 +53,7 @@ class Extended_Client(mqtt.Client):
         cmd = None
         mid = None
         qos = None
+        """
 
         # put on wire
         self._packet_queue(cmd, binary_packet, mid, qos)
@@ -68,7 +71,10 @@ class Extended_Client(mqtt.Client):
         elif cmd == PUBCOMP:
             return self._handle_pubackcomp("PUBCOMP")
         elif cmd == PUBLISH:
-            return self._handle_publish()
+            # send puback and so on
+            self._handle_publish()
+            # forward
+            return self._forward_to_partner()
         elif cmd == PUBREC:
             return self._handle_pubrec()
         elif cmd == PUBREL:
@@ -91,11 +97,14 @@ class Extended_Client(mqtt.Client):
     def _handle_subscribe(self):
         # TODO decode packet and send SUBACK
 
-        self.local_interface.pass_packet_to_partner(self._in_packet["packet"], self._client_id)
-        return MQTT_ERR_SUCCESS
+        return self._forward_to_partner()
 
     def _handle_unsubscribe(self):
         # TODO decode packet and send UNSUBACK
 
+        return self._forward_to_partner()
+
+    def _forward_to_partner(self):
+        print("ppp: forwarding packet to partner")
         self.local_interface.pass_packet_to_partner(self._in_packet["packet"], self._client_id)
         return MQTT_ERR_SUCCESS

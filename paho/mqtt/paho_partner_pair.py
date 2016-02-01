@@ -51,7 +51,7 @@ class Paho_Partner_Pair():
         self.internal_client.on_subscribe = on_subscribe
 
         # externe instanz connection wo man will MQTTserverExample
-        self.external_client = Extended_Client(partner_pair=self, userdata="cl_b")
+        self.external_client = Extended_Client(partner_pair=self, client_id="broker_random4", userdata="cl_b")
         self.internal_client.on_message = on_message
         self.internal_client.on_connect = on_connect
         self.internal_client.on_publish = on_publish
