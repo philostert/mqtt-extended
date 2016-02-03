@@ -60,14 +60,12 @@ class IncomingSubscribe(IncomingAction):
         granted_qos = []
         for topic, qos in self.msg.subscription_intents:
             granted = self._client.subscribe(topic, qos)
+            # client.subscribe() returns 0x80 on error
+            # but 0x80 is the value to send inside a SUBACK packet to indicate rejection
             granted_qos.append(granted)
 
         m = Suback.from_subscribe(self.msg, granted_qos)
         self.write_to_client(m)
-        # XXX escalate subscriptions
-        self._client.server.forward_subscription(topic, granted_qos, sender_uid=self._client.uid)
-        print("SUBSCRIBING {} to: {} {}".format(self._client.uid, topic, qos))
-
 
 class IncomingDisconnect(IncomingAction):
     def run(self):

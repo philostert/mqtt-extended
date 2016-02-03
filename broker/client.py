@@ -341,7 +341,7 @@ class MQTTClient():
             if ereg is not None:
                 self.subscriptions.add(subscription_mask, qos, re.compile(ereg))
                 self.server.enqueue_retained_message(self, subscription_mask)
-
+                self.server.forward_subscription(subscription_mask, qos, sender_uid=self.uid)
             else:
                 qos = 0x80
         if "#" in subscription_mask:
