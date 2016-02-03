@@ -46,7 +46,7 @@ class MQTTClient():
 
     def __init__(self, server, connection, authorization=None,
                  uid=None, clean_session=False,
-                 keep_alive=60, persistence=None, receive_subscriptions=None):
+                 keep_alive=60, persistence=None):
 
         self.uid = uid
         self.logger = getLogger('activity.clients')
@@ -68,7 +68,7 @@ class MQTTClient():
         # Queue of the packets ready to be delivered
         self.outgoing_queue = OutgoingQueue(self.persistence.outgoing_publishes)
 
-        self.update_configuration(clean_session, keep_alive, receive_subscriptions)
+        self.update_configuration(clean_session, keep_alive)
         self.update_connection(connection)
 
     @property
@@ -105,7 +105,7 @@ class MQTTClient():
             if not self.connection.closed():
                 self._connected.set()
 
-    def update_configuration(self, clean_session=False, keep_alive=60, receive_subscriptions=None):
+    def update_configuration(self, clean_session=False, keep_alive=60):#, receive_subscriptions=None):
         """
         Updates the internal attributes.
 
@@ -116,9 +116,8 @@ class MQTTClient():
         """
         self.clean_session = clean_session
         self.keep_alive = keep_alive
-        # FIXME add parameter to calls of update_configuration(...)
-        if receive_subscriptions is not None:
-            self.receive_subscriptions = receive_subscriptions
+        #if receive_subscriptions is not None:
+        #    self.receive_subscriptions = receive_subscriptions
 
     def update_authorization(self, authorization):
         self.authorization = authorization

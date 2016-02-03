@@ -400,7 +400,7 @@ class MQTTServer(TCPServer):
 
     def forward_subscription(self, topic, granted_qos, sender_uid):
         """
-        :param topic_qos: A list of topic-qos-pairs to forward.
+        :param topic: topic name or topic mask (with wildcards)
         :param sender_uid: sender's ID, don't send subscription back there!
         :return: FIXME (not specified yet)
         """
@@ -490,7 +490,7 @@ class MQTTServer(TCPServer):
         for topic, (message, sender_uid) in self._retained_messages.items():
             # XXX Packet loop restriction #4: no forwarding to sender if sender
             # also receives subscriptions.
-            if client.uid == sender_uid and client.receive_subscriptions:
+            if client.uid == sender_uid and client.is_broker():#receive_subscriptions:
                 continue
 
             if message is not None:
