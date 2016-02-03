@@ -49,16 +49,16 @@ class MQTTServer(TCPServer):
     def register_paho_partner_pair(self, pair):  # pair: Paho_Partner_Pair):
         assert isinstance(pair, Paho_Partner_Pair)
         self.paho_partner_pair = pair
-        # and a shortcut
-        self.uplink = pair.internal_client
+        # XXX this was wrong!: self.uplink = pair.internal_client
 
     def has_uplink(self):
-        """ checks whether a paho_partner_pair was registered. if so shortcut uplink exists
+        """ checks whether a paho_partner_pair was registered and uplink is
+        represented by a common tegris client object.
         :return:
         """
-        if self.paho_partner_pair is None:
-            return False
-        return True
+        if self.paho_partner_pair and self.uplink:
+            return True
+        return False
 
     def recreate_sessions(self, uids):
         access_log.info("recreating %s sessions" % len(uids))
@@ -251,6 +251,12 @@ class MQTTServer(TCPServer):
         assert isinstance(client, MQTTClient)
         self.clients[client.uid] = client
 
+        if not self.uplink and "uplink" == client.uid:
+            # self.uplink shall be the tegris-representation of the local
+            # paho partner pair client facing tegris. It's likely that
+            # no external client could connect beforehand with uid 'uplink'.
+            self.uplink = client
+
     def remove_client(self, client):
         """
         Removes a client from the know clients list. It's safe to call this
@@ -305,6 +311,7 @@ class MQTTServer(TCPServer):
                 client.publish(cache[qos])
 
         # TODO remove all code below - this is just a test of the forwarding method
+        '''
         if "uplink" == client.uid:
             print("SEND TO UPLINK - ALWAYS ALL! TESTING")
             qos = 0
@@ -315,7 +322,7 @@ class MQTTServer(TCPServer):
                 cache[qos] = msg_copy
 
             client.publish(cache[qos])
-
+        '''
     """
     1. Write to hacked topic list
     2. Check if uplink is set
@@ -336,19 +343,27 @@ class MQTTServer(TCPServer):
             print("cancel: decide_uplink_publish - has no uplink!")
             return
         # 3. don't send it back where it came from
-        if self.uplink.get_uid() == sender_uid:
+        if self.uplink.uid == sender_uid:
             return
         # TODO decide whether to publish with contents or announce without contents!
         # announce only: keep track of (topic, qos) and announce only once
         # 4.
-        assert isinstance(self.uplink, Extended_Client)
+        assert isinstance(self.uplink, MQTTClient)
         assert isinstance(msg, Publish)
         # 5.
+        print("Announcing %s" % msg.topic)
+        self.uplink.send_packet(msg)
+        '''
+        upl = self.clients.get("uplink")
+        if upl is not None:
+            assert isinstance(upl, MQTTClient)
+            print("found uplink")
+            upl.send_packet(msg)
+        '''
         # XXX announce via shorter route; try long route to test long route in general
         # self.uplink.send_packet(msg) # long route
         # self.paho_partner_pair.announce(msg.topic, msg.qos) # shorter route
-        print("Announcing %s" % msg.topic)
-        self.paho_partner_pair.announce(msg)
+        #self.paho_partner_pair.announce(msg)
         # shorter route
 
     def broadcast_message(self, msg, sender_uid):
