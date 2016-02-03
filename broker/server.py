@@ -423,7 +423,10 @@ class MQTTServer(TCPServer):
         access_log.info("[.....] forwarding subscription from: \"%s\"" % sender_uid)
 
         # TODO rebuild package with subscription intents; think about qos
-        msg = Subscribe()
+        msg = Subscribe.generate_single_sub(topic, granted_qos)
+        if msg:
+            return
+        print("BROKEN!")
 
         # recipients = [c for c in self.clients if c.receive_subscriptions and not c.uid == sender_uid]
         recipients = filter(lambda client: client.receive_subscriptions and not client.uid == sender_uid,

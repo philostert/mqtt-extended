@@ -335,6 +335,9 @@ class Subscribe(BaseMQTTMessage):
         buffer.extend(MQTTUtils.encode_value(self.id))
 
         for intent in self.subscription_intents:
+            print("LEARNING what is intent:")
+            print(intent.__class__)
+            print(intent)
             topic, qos = intent
             buffer.extend(MQTTUtils.encode_string(topic))
             buffer.append(MQTTUtils.encode_byte(qos) & self.QOS_PART_MASK)
@@ -346,6 +349,29 @@ class Subscribe(BaseMQTTMessage):
             self.id,
             ', '.join([str(l) for t, l in self.subscription_intents]) or '?',
         )
+
+    @classmethod
+    def generate_single_sub(cls, topic, qos):
+        print("generating msg of type SUBSCRIBE")
+        msg = Subscribe()
+        intent = tuple((topic, qos))
+        t, q = intent
+        print("LEARNING what is intent (cls) ____:")
+        print(intent.__class__)
+        print(intent)
+        msg.id = 444 # chosen by fair dice roll.
+        msg.subscription_intents = []
+        msg.subscription_intents.append(intent)
+        print("t,p: %s %d" % (t,q))
+        for intent in msg.subscription_intents:
+            print("LEARNING what is intent (cls):")
+            print(intent.__class__)
+            print(intent)
+        byt = msg._encode_data()
+        print("SUBSCRIBE raw data:")
+        print(msg._raw_data)
+        print(byt)
+        return msg
 
 
 class Suback(BaseMQTTMessage):

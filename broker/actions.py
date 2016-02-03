@@ -54,7 +54,7 @@ class IncomingPublish(IncomingAction):
         elif self.qos is MQTTConstants.EXACTLY_ONCE:
             self.write_to_client(Pubrec.from_publish(self.msg))
 
-
+from broker.messages import Subscribe
 class IncomingSubscribe(IncomingAction):
     def run(self):
         granted_qos = []
