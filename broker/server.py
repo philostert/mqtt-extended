@@ -338,6 +338,8 @@ class MQTTServer(TCPServer):
         if not (msg.topic, msg.qos) in self.hacked_topic_list:
             print("Added Topic to Publishlist: {} QoS: {} Payload: {}".format(msg.topic, msg.qos, msg.payload))
             self.hacked_topic_list.append((msg.topic, msg.qos))
+        else:
+            return # already announced once
         # 2.
         if not self.has_uplink():
             print("cancel: decide_uplink_publish - has no uplink!")
