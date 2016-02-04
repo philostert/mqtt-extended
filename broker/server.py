@@ -43,6 +43,7 @@ class MQTTServer(TCPServer):
         assert isinstance(self._retained_messages, RetainedMessages)
 
         self.hacked_topic_list = []
+        self.hacked_subs_dict = dict()
         self.paho_partner_pair = None  # Paho_Partner_Pair(external_address="m2m.eclipse.org")
         self.uplink = None  # self.paho_partner_pair.internal_client
 
@@ -398,14 +399,34 @@ class MQTTServer(TCPServer):
         print("CALL DECIDE UPLINK PUBLISH")
         self.decide_uplink_publish(msg, sender_uid)
 
-    def forward_subscription(self, topic, granted_qos, sender_uid):
+    def track_client_subscription(self, mask, client_uid):
+        action_required = False
+        if mask not in self.hacked_subs_dict:
+            # need new list
+            self.hacked_subs_dict[mask] = []
+            action_required = True
+        assert isinstance(self.hacked_subs_dict[mask], list)
+        self.hacked_subs_dict[mask].append(client_uid)
+        return action_required
+
+    def untrack_client_subscription(self, mask, client_uid):
+        action_required = False
+        if mask in self.hacked_subs_dict:
+            assert isinstance(self.hacked_subs_dict[mask], list)
+            self.hacked_subs_dict[mask].remove(client_uid)
+            if not self.hacked_subs_dict[mask]: # list is empty
+                del self.hacked_subs_dict[mask]
+                action_required = True # action required; last client deleted. TODO broker should unsubscribe now
+        return action_required
+
+    def forward_subscription(self, subscription_mask, granted_qos, sender_uid):
         """
-        :param topic: topic name or topic mask (with wildcards)
+        :param subscription_mask: subscription_mask (might have with wildcards)
         :param sender_uid: sender's ID, don't send subscription back there!
         :return: FIXME (not specified yet)
         """
         """
-        if not (topic, granted_qos) in self.hacked_topic_list:
+        if not (subscription_mask, granted_qos) in self.hacked_topic_list:
             access_log.info("[.....] forwarding subscription from: \"%s\"" % sender_uid)
             # TODO rebuild package with subscription intents; think about qos
             msg = Subscribe()
@@ -420,16 +441,21 @@ class MQTTServer(TCPServer):
                 pass
                 # Uplink.send_packet(msg)
         """
-        access_log.info("[.....] forwarding subscription from: \"%s\"" % sender_uid)
+        access_log.debug("[...] decide subscription forwarding from: \"%s\" for \"%s\"" % (sender_uid, subscription_mask))
 
-        # TODO rebuild package with subscription intents; think about qos
-        msg = Subscribe.generate_single_sub(topic, granted_qos)
-        if msg:
-            if self.has_uplink():
-                self.uplink.write(msg) # TODO change this testing line
-            return
-        print("BROKEN!")
+        action_required = self.track_client_subscription(subscription_mask, sender_uid)
+        access_log.debug("decided: action_required = {}".format(action_required))
 
+        if action_required:
+            access_log.debug("generating Subscribe Message")
+            msg = Subscribe.generate_single_sub(subscription_mask, granted_qos)
+            if msg:
+                if self.has_uplink():
+                    self.uplink.write(msg) # TODO change this testing line
+                return
+            print("BROKEN!")
+
+        '''
         # recipients = [c for c in self.clients if c.receive_subscriptions and not c.uid == sender_uid]
         recipients = filter(lambda client: client.receive_subscriptions and not client.uid == sender_uid,
                             self.clients.values())
@@ -440,6 +466,7 @@ class MQTTServer(TCPServer):
         if sender_uid:  # XXX uplink is not a client, assume sender_uid would be None
             pass
             # Uplink.send_packet(msg)
+        '''
 
     def disconnect_client(self, client):
         """
