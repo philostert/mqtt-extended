@@ -425,6 +425,8 @@ class MQTTServer(TCPServer):
         # TODO rebuild package with subscription intents; think about qos
         msg = Subscribe.generate_single_sub(topic, granted_qos)
         if msg:
+            if self.has_uplink():
+                self.uplink.write(msg) # TODO change this testing line
             return
         print("BROKEN!")
 

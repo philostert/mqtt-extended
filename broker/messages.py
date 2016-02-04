@@ -335,9 +335,6 @@ class Subscribe(BaseMQTTMessage):
         buffer.extend(MQTTUtils.encode_value(self.id))
 
         for intent in self.subscription_intents:
-            print("LEARNING what is intent:")
-            print(intent.__class__)
-            print(intent)
             topic, qos = intent
             buffer.extend(MQTTUtils.encode_string(topic))
             buffer.append(MQTTUtils.encode_byte(qos) & self.QOS_PART_MASK)
@@ -356,21 +353,21 @@ class Subscribe(BaseMQTTMessage):
         msg = Subscribe()
         intent = tuple((topic, qos))
         t, q = intent
-        print("LEARNING what is intent (cls) ____:")
-        print(intent.__class__)
-        print(intent)
+        print("t,p: %s %d" % (t,q))
         msg.id = 444 # chosen by fair dice roll.
         msg.subscription_intents = []
         msg.subscription_intents.append(intent)
-        print("t,p: %s %d" % (t,q))
         for intent in msg.subscription_intents:
             print("LEARNING what is intent (cls):")
             print(intent.__class__)
             print(intent)
+        # TODO remove overhead
+        msg._update_raw_data() # i think that's it!
         byt = msg._encode_data()
-        print("SUBSCRIBE raw data:")
-        print(msg._raw_data)
+        print("ENCODED raw data bytes and")
+        print("SUBSCRIBE._raw_data:")
         print(byt)
+        print(msg._raw_data)
         return msg
 
 
