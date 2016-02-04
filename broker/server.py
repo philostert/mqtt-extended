@@ -18,6 +18,7 @@ from paho.mqtt.paho_partner_pair import Paho_Partner_Pair
 
 client_logger = getLogger('activity.clients')
 
+access_log.debug = access_log.info # FIXME trying to prevent bug with more logging, remove this line when fixed
 
 class MQTTServer(TCPServer):
     """
@@ -442,6 +443,7 @@ class MQTTServer(TCPServer):
                 # Uplink.send_packet(msg)
         """
         access_log.debug("[...] decide subscription forwarding from: \"%s\" for \"%s\"" % (sender_uid, subscription_mask))
+
 
         action_required = self.track_client_subscription(subscription_mask, sender_uid)
         access_log.debug("decided: action_required = {}".format(action_required))
