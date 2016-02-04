@@ -356,6 +356,7 @@ class MQTTClient():
         """
         for topic in topics:
             del self.subscriptions[topic]
+            self.server.forward_unsubscription(topic, self.uid)
 
     def unsubscribe_denied_topics(self):
         for topic in self.subscriptions.masks:

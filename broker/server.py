@@ -470,6 +470,12 @@ class MQTTServer(TCPServer):
             # Uplink.send_packet(msg)
         '''
 
+    def forward_unsubscription(self, subscription_mask, sender_uid):
+        action_required = self.untrack_client_subscription(subscription_mask, sender_uid)
+        if action_required:
+            # TODO do unsubscribe (build such packet and send it)
+            pass
+
     def disconnect_client(self, client):
         """
         Disconnects a MQTT client. Can be safely called without checking if the
