@@ -108,7 +108,7 @@ def start_mqtt_server(persistence, clients,
 
 
 def start_secure_mqtt_server(persistence, clients,
-                             authentication_agent, log):
+                             authentication_agent, log, listen_port=8883):
     ssl_options = create_ssl_options(options)
 
     server = MQTTServer(authentication=authentication_agent,
@@ -116,9 +116,9 @@ def start_secure_mqtt_server(persistence, clients,
                         clients=clients,
                         ssl_options=ssl_options)
 
-    server.listen(8883)
-    print("listening port 8883")
-    log.info("listening port 8883")
+    server.listen(listen_port)
+    print("listening port %s" % listen_port)
+    log.info("listening port %s" % listen_port)
 
     return server
 

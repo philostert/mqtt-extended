@@ -349,25 +349,11 @@ class Subscribe(BaseMQTTMessage):
 
     @classmethod
     def generate_single_sub(cls, topic, qos):
-        print("generating msg of type SUBSCRIBE")
+        print("generating SUBSCRIBE with qos, topic: %d, \"%s\"" % (qos,topic))
         msg = Subscribe()
-        intent = tuple((topic, qos))
-        t, q = intent
-        print("t,p: %s %d" % (t,q))
+        # TODO generate random or safe msg.id
         msg.id = 444 # chosen by fair dice roll.
-        msg.subscription_intents = []
-        msg.subscription_intents.append(intent)
-        for intent in msg.subscription_intents:
-            print("LEARNING what is intent (cls):")
-            print(intent.__class__)
-            print(intent)
-        # TODO remove overhead
-        msg._update_raw_data() # i think that's it!
-        byt = msg._encode_data()
-        print("ENCODED raw data bytes and")
-        print("SUBSCRIBE._raw_data:")
-        print(byt)
-        print(msg._raw_data)
+        msg.subscription_intents = [(topic, qos)]
         return msg
 
 

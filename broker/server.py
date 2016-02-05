@@ -290,8 +290,6 @@ class MQTTServer(TCPServer):
         :param dict cache: A dict that will be used for raw data caching.
           Defaults to a empty dictionary if None.
         """
-        print("dispatching Publish to client_id: %s of class %s" % (client.uid, client.__class__))
-
         assert isinstance(msg, Publish)
         assert isinstance(client, MQTTClient)
         assert client.uid in self.clients
@@ -312,59 +310,38 @@ class MQTTServer(TCPServer):
 
                 client.publish(cache[qos])
 
-        # TODO remove all code below - this is just a test of the forwarding method
-        '''
-        if "uplink" == client.uid:
-            print("SEND TO UPLINK - ALWAYS ALL! TESTING")
-            qos = 0
-            if qos not in cache:
-                msg_copy = msg.copy()
-                msg_copy.retain = True # retain!!!
-                msg_copy.qos = qos
-                cache[qos] = msg_copy
-
-            client.publish(cache[qos])
-        '''
-    """
-    1. Write to hacked topic list
-    2. Check if uplink is set
-    3. Check for origin
-    4. Assert that all types fit
-    5. Send new topic to upstream
-    """
-
     def decide_uplink_publish(self, msg, sender_uid):
+        """
+        1. Write to hacked topic list
+        2. Check if uplink is set
+        3. Check for origin
+        4. Assert that all types fit
+        5. Send new topic to upstream
+        """
         # 0.
         msg.retain = True
         # 1.
         if not (msg.topic, msg.qos) in self.hacked_topic_list:
-            print("Added Topic to Publishlist: {} QoS: {} Payload: {}".format(msg.topic, msg.qos, msg.payload))
+            client_logger.debug("New Topic: {} QoS: {} Payload: {}".format(msg.topic, msg.qos, msg.payload))
             self.hacked_topic_list.append((msg.topic, msg.qos))
         else:
             return # already announced once
         # TODO check first publish against known subsciptions: maybe send subscribe to publisher!
         # 2.
         if not self.has_uplink():
-            print("cancel: decide_uplink_publish - has no uplink!")
+            client_logger.debug("cancel: decide_uplink_publish() - has no uplink!")
             return
         # 3. don't send it back where it came from
         if self.uplink.uid == sender_uid:
+            client_logger.debug("cancel: decide_uplink_publish() - uplink transmitted the message")
             return
-        # TODO decide whether to publish with contents or announce without contents!
         # announce only: keep track of (topic, qos) and announce only once
         # 4.
         assert isinstance(self.uplink, MQTTClient)
         assert isinstance(msg, Publish)
         # 5.
-        print("Announcing %s" % msg.topic)
+        client_logger.info("Announcing %s" % msg.topic)
         self.uplink.send_packet(msg)
-        '''
-        upl = self.clients.get("uplink")
-        if upl is not None:
-            assert isinstance(upl, MQTTClient)
-            print("found uplink")
-            upl.send_packet(msg)
-        '''
         # XXX announce via shorter route; try long route to test long route in general
         # self.uplink.send_packet(msg) # long route
         # self.paho_partner_pair.announce(msg.topic, msg.qos) # shorter route
@@ -398,7 +375,6 @@ class MQTTServer(TCPServer):
                 self.dispatch_message(client, msg, cache)
             else:
                 self.dispatch_message(client, msg_reduced, cache)
-        print("CALL DECIDE UPLINK PUBLISH")
         self.decide_uplink_publish(msg, sender_uid)
 
     def handle_incoming_subscribe(self, mask, engine, qos, sender_uid):
