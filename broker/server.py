@@ -369,7 +369,7 @@ class MQTTServer(TCPServer):
         for client in self.clients.values():
             # XXX Packet loop restriction #4: no forwarding to sender if sender
             # also receives subscriptions.
-            if client.uid == sender_uid and client.receive_subscriptions:
+            if client.uid == sender_uid and client.is_broker():
                 continue
             if client.is_broker():
                 self.dispatch_message(client, msg, cache)
@@ -489,7 +489,7 @@ class MQTTServer(TCPServer):
         for topic, (message, sender_uid) in self._retained_messages.items():
             # XXX Packet loop restriction #4: no forwarding to sender if sender
             # also receives subscriptions.
-            if client.uid == sender_uid and client.is_broker():#receive_subscriptions:
+            if client.uid == sender_uid and client.is_broker():
                 continue
 
             if message is not None:

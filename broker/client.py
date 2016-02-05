@@ -60,7 +60,6 @@ class MQTTClient():
         self.connection = None
         self.clean_session = None
         self.keep_alive = None
-        self.receive_subscriptions = False
 
         self.server = server
         self.authorization = authorization or Authorization.no_restrictions()
@@ -105,7 +104,7 @@ class MQTTClient():
             if not self.connection.closed():
                 self._connected.set()
 
-    def update_configuration(self, clean_session=False, keep_alive=60):#, receive_subscriptions=None):
+    def update_configuration(self, clean_session=False, keep_alive=60):
         """
         Updates the internal attributes.
 
@@ -116,8 +115,6 @@ class MQTTClient():
         """
         self.clean_session = clean_session
         self.keep_alive = keep_alive
-        #if receive_subscriptions is not None:
-        #    self.receive_subscriptions = receive_subscriptions
 
     def update_authorization(self, authorization):
         self.authorization = authorization
