@@ -338,9 +338,10 @@ class MQTTClient():
         elif new_subscription:
             ereg = MQTTUtils.convert_to_ereg(subscription_mask)
             if ereg is not None:
-                self.subscriptions.add(subscription_mask, qos, re.compile(ereg))
+                engine = re.compile(ereg)
+                self.subscriptions.add(subscription_mask, qos, engine)
                 self.server.enqueue_retained_message(self, subscription_mask)
-                self.server.forward_subscription(subscription_mask, qos, sender_uid=self.uid)
+                self.server.handle_incoming_subscribe(subscription_mask, engine, qos, self.uid)
             else:
                 qos = 0x80
         if "#" in subscription_mask:
@@ -356,7 +357,7 @@ class MQTTClient():
         """
         for topic in topics:
             del self.subscriptions[topic]
-            self.server.forward_unsubscription(topic, self.uid)
+            self.server.handle_incoming_unsubscribe(topic, self.uid)
 
     def unsubscribe_denied_topics(self):
         for topic in self.subscriptions.masks:

@@ -342,6 +342,7 @@ class MQTTServer(TCPServer):
             self.hacked_topic_list.append((msg.topic, msg.qos))
         else:
             return # already announced once
+        # TODO check first publish against known subsciptions: maybe send subscribe to publisher!
         # 2.
         if not self.has_uplink():
             print("cancel: decide_uplink_publish - has no uplink!")
@@ -400,25 +401,55 @@ class MQTTServer(TCPServer):
         print("CALL DECIDE UPLINK PUBLISH")
         self.decide_uplink_publish(msg, sender_uid)
 
-    def track_client_subscription(self, mask, client_uid):
-        action_required = False
-        if mask not in self.hacked_subs_dict:
-            # need new list
-            self.hacked_subs_dict[mask] = []
-            action_required = True
-        assert isinstance(self.hacked_subs_dict[mask], list)
-        self.hacked_subs_dict[mask].append(client_uid)
-        return action_required
+    def handle_incoming_subscribe(self, mask, engine, qos, sender_uid):
+    #def track_client_subscription(self, mask, client_uid):
+        assert isinstance(mask, str)
+        #assert isinstance(engine, _sre.SRE_Pattern)
+        assert isinstance(qos, int)
+        assert isinstance(sender_uid, str)
 
-    def untrack_client_subscription(self, mask, client_uid):
-        action_required = False
+        if mask in self.hacked_subs_dict:
+            # subscription should have been forwarded already
+            assert isinstance(self.hacked_subs_dict[mask], list)
+            self.hacked_subs_dict[mask].append(sender_uid)
+            return
+
+        # new list of subscribers
+        self.hacked_subs_dict[mask] = [sender_uid]
+
+        '''
+        forwarding decision making:
+        #1 escalate upwards until topic is found
+           (hint: masks with wildcards can never be found to full extend and therefore are always forwarded)
+        #2 only forward downwards if some matching topic is known to be there
+        --- as a flow ---
+        if topic not found:
+            escalate to uplink
+        else:
+            if topic came from a broker-client below:
+                subscribe it there
+        '''
+        #access_log.debug("decide subscription forwarding from: \"%s\" for \"%s\"" % (sender_uid, subscription_mask))
+        # TODO check subscribe against known topics 'hacked_topic_list'
+
+        # create Subscribe message and send it to brokers
+        try:
+            msg = Subscribe.generate_single_sub(mask, qos)
+            # TODO send subs forward according to "the rules"
+            if self.has_uplink():
+                self.uplink.write(msg) # TODO change this testing line
+            return
+        except Exception as e:
+            print("%s" % e)
+
+    def handle_incoming_unsubscribe(self, mask, sender_uid):
+    #def untrack_client_subscription(self, mask, client_uid):
         if mask in self.hacked_subs_dict:
             assert isinstance(self.hacked_subs_dict[mask], list)
-            self.hacked_subs_dict[mask].remove(client_uid)
+            self.hacked_subs_dict[mask].remove(sender_uid)
             if not self.hacked_subs_dict[mask]: # list is empty
                 del self.hacked_subs_dict[mask]
-                action_required = True # action required; last client deleted. TODO broker should unsubscribe now
-        return action_required
+                # last client deleted. TODO broker should unsubscribe this mask now.
 
     def forward_subscription(self, subscription_mask, granted_qos, sender_uid):
         """
@@ -426,55 +457,7 @@ class MQTTServer(TCPServer):
         :param sender_uid: sender's ID, don't send subscription back there!
         :return: FIXME (not specified yet)
         """
-        """
-        if not (subscription_mask, granted_qos) in self.hacked_topic_list:
-            access_log.info("[.....] forwarding subscription from: \"%s\"" % sender_uid)
-            # TODO rebuild package with subscription intents; think about qos
-            msg = Subscribe()
-
-            # recipients = [c for c in self.clients if c.receive_subscriptions and not c.uid == sender_uid]
-            recipients = filter(lambda client: client.receive_subscriptions and not client.uid == sender_uid,
-                            self.clients.values())
-            for client in recipients:
-                client.send_packet(msg)
-            # TODO send it to "uplink" message broker if it did not come from there
-            if sender_uid:  # XXX uplink is not a client, assume sender_uid would be None
-                pass
-                # Uplink.send_packet(msg)
-        """
-        access_log.debug("[...] decide subscription forwarding from: \"%s\" for \"%s\"" % (sender_uid, subscription_mask))
-
-
-        action_required = self.track_client_subscription(subscription_mask, sender_uid)
-        access_log.debug("decided: action_required = {}".format(action_required))
-
-        if action_required:
-            access_log.debug("generating Subscribe Message")
-            msg = Subscribe.generate_single_sub(subscription_mask, granted_qos)
-            if msg:
-                if self.has_uplink():
-                    self.uplink.write(msg) # TODO change this testing line
-                return
-            print("BROKEN!")
-
-        '''
-        # recipients = [c for c in self.clients if c.receive_subscriptions and not c.uid == sender_uid]
-        recipients = filter(lambda client: client.receive_subscriptions and not client.uid == sender_uid,
-                            self.clients.values())
-        for client in recipients:
-            client.send_packet(msg)
-
-        # TODO send it to "uplink" message broker if it did not come from there
-        if sender_uid:  # XXX uplink is not a client, assume sender_uid would be None
-            pass
-            # Uplink.send_packet(msg)
-        '''
-
-    def forward_unsubscription(self, subscription_mask, sender_uid):
-        action_required = self.untrack_client_subscription(subscription_mask, sender_uid)
-        if action_required:
-            # TODO do unsubscribe (build such packet and send it)
-            pass
+        raise DeprecationWarning("maybe: handle_incoming_subscribe() ?")
 
     def disconnect_client(self, client):
         """
