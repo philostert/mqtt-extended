@@ -45,40 +45,28 @@ class Paho_Partner_Pair():
     def __init__(self):
         print("Paho_Partner_Pair.__init__")
 
-        # interne paho instanz localhost
-        self.internal_client = Extended_Client(partner_pair=self, client_id="uplink", userdata="cl_uplink")
+        # internal paho instance (via loop interface to localhost)
+        self.internal_client = Extended_Client(partner_pair=self, client_id="uplink", userdata="paho: uplink")
         self.internal_client.on_message = on_message
         self.internal_client.on_connect = on_connect
         self.internal_client.on_publish = on_publish
         self.internal_client.on_subscribe = on_subscribe
 
-        # externe instanz connection wo man will MQTTserverExample
-        self.external_client = Extended_Client(partner_pair=self, client_id="broker_random4", userdata="cl_b")
+        # external instance connecting to another broker.
+        # This other broker might assume that this is just another normal client.
+        self.external_client = Extended_Client(partner_pair=self, client_id="broker_random4", userdata="paho: facing away")
         self.internal_client.on_message = on_message
         self.internal_client.on_connect = on_connect
         self.internal_client.on_publish = on_publish
         self.internal_client.on_subscribe = on_subscribe
 
-    def connect(self, external_address, port):
-        internal_address = "127.0.0.1"
-        self.internal_client.connect(internal_address)
+    def connect(self, internal_port, external_address, external_port):
+        internal_address = "localhost"
+        self.internal_client.connect(internal_address, internal_port)
         self.internal_client.loop_start()  # starts a Thread
 
-        self.external_client.connect(external_address, port)
+        self.external_client.connect(external_address, external_port)
         self.external_client.loop_start()  # starts a Thread
-
-    # def announce(self, topic, qos):
-    #    self.external_client.publish(topic, payload=None, qos=qos, retain=True)
-
-    def announce(self, msg : BaseMQTTMessage):
-        #print("[.....] announcing topic(%s) : payload(%s) : qos(%d)" % msg.topic % msg.payload % msg.qos)
-        #self.external_client.publish(self, topic=msg.topic, payload=msg.payload, qos=msg.qos, retain=True)
-        # FIXME find out how to get the upstream broker into the printout; Announce with/without payload?
-        #print("[.....] announcing topic({}) : payload({}) : qos({}) TO {})".format(msg.topic, msg.payload, msg.qos,
-        #                                                                           'FIXME'))
-        # TODO test other way:
-        binary_packet = msg.raw_data
-        #self.external_client.enqueue_packet(binary_packet)
 
     def pass_packet_to_partner(self, binary_packet: bytes, origin_id):
         if origin_id == self.external_client._client_id:
@@ -91,6 +79,3 @@ class Paho_Partner_Pair():
             return self.internal_client
         elif my_id == self.internal_client._client_id:
             return self.external_client
-
-            # pair = Paho_Partner_Pair("foo")
-            # print("pair created")
