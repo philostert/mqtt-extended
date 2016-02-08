@@ -1,12 +1,15 @@
 from broker.exceptions import BeginTracking, EndTracking
+from broker.client import MQTTClient
 import re
 
 # Two basic alternatives "one-topic-level" and "at-least-two-topic-levels" in order to not match empty strings.
 # Per level literal character group %(l)s excludes certain unicode points.
 # Unicode exclusions defined @ MQTT Version 3.1.1, Section 1.5.3 UTF-8 encoded strings.
 re_match_valid_mask = re.compile(r'^([+#]|%(l)s+)$|^(([+]|%(l)s*)/(([+]|%(l)s*)/)*([+#]|%(l)s*))$' %
-                                 {'l': r'[^+#/\u0000\ud800-\udfff\u0001-\u001f\u007f-\u009f]'}) # group of literals
+                                 {'l': r'[^+#/\u0000\ud800-\udfff\u0001-\u001f\u007f-\u009f]'}) #group: allowed literals
 
+re_match_valid_topic_literal = re.compile(r'^(%(l)s+|/)+$' %
+                                 {'l': r'[^+#/\u0000\ud800-\udfff\u0001-\u001f\u007f-\u009f]'}) #group: allowed literals
 
 class Tracker:
     def __init__(self):
@@ -24,16 +27,7 @@ def foo(mask, qos, client):
 
 # FIXME don't ask, tell! Let the tracker also do forwarding decisions and their execution?!
 class SubMaskTracker(Tracker):
-    def add_sub(mask, qos, client):
-        assert isinstance(mask, str)
-        assert isinstance(qos, int)
-        if not re_match_valid_mask.match(mask):
-            raise ValueError
-
-        topic_levels = mask.split("/")
-        for level in topic_levels:
-            self.
-
+    '''
     class _LevelEntry:
         def __init__(self, level_name):
             self._sublevels = dict()        # topic level key e.g. '+', '#', 'temperature'  => _LevelEntry
@@ -62,9 +56,6 @@ class SubMaskTracker(Tracker):
                             matches[client] = qos
                 return matches
 
-
-
-
         def add_client(self, qos, uid):
             assert isinstance(qos, int)
             assert isinstance(uid, str)
@@ -77,10 +68,77 @@ class SubMaskTracker(Tracker):
 
         def is_empty(self):
             return bool(self._subs)
+    '''
+    class _Level:
+        def __init__(self):
+            self.levels = dict()
+            self.subscriptions = dict()
 
     def __init__(self):
         super().__init__()
         self._subscriptions = dict()
+        self._level0 = self._Level() # (sublevel, subscribers) # level0 cannot have subscribers, mask would be ''
+
+    def add_sub(self, mask, qos, client):
+        '''
+        Adds or updates a subscription mask with the corresponding QoS.
+        :param mask: subscription mask
+        :param qos:
+        :param client:
+        :return:
+        '''
+        assert isinstance(mask, str)
+        assert isinstance(qos, int)
+        assert isinstance(client, MQTTClient)
+        if not re_match_valid_mask.match(mask):
+            raise ValueError
+
+        topic_levels = mask.split("/")
+        node = self._level0
+        for key in topic_levels:
+            # create sub-level if necessary
+            if key not in node.levels:
+                node.levels[key] = self._Level()
+            node = node.levels[key] # move on
+        # update subscription on target node
+        node.subscriptions[client] = qos
+
+    def _collect_subscriptions_into(self, collection, addition):
+        for client, qos in addition:
+            if client not in collection or qos > collection[client]:
+                collection[client] = qos
+
+    def get_subscriptions(self, topic):
+        '''
+        Uses graph Depth-First-Search algorithm to find and collect matching subscriptions. Each
+        client only appears once with it's maximum of granted QoS.
+        :param topic:
+        :return:
+        '''
+        assert isinstance(topic, str)
+        if not re_match_valid_topic_literal.match(topic):
+            raise ValueError
+
+        # mapping of subscriptions found
+        collected = type(self._level0.subscriptions)()
+
+        publish_topic_levels = topic.split("/")
+        final_depth = len(publish_topic_levels)
+        node_stack = [(self._level0, 0)] #== [(node, holding_depth)]
+        while node_stack:
+            node, holding_depth = node_stack.pop()
+            # searching at most three sub-nodes: the literal, '+' and '#'
+            avail_sub_nodes = [ (key, node.levels[key]) for key in {'#', '+', publish_topic_levels[holding_depth]} if key in node.levels ]
+            for key, sub_node in avail_sub_nodes:
+                assert isinstance(sub_node, self._Level)
+                if key == '#' or holding_depth == final_depth:
+                    # no need to look any deeper there, get subscriptions
+                    self._collect_subscriptions_into(collected, sub_node.subscriptions)
+                else:
+                    node_stack.append((sub_node, holding_depth +1))
+        return collected
+
+
 
     def add(self, mask, engine, qos, uid):
         assert isinstance(mask, str)
