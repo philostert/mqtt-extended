@@ -397,6 +397,25 @@ class MQTTServer(TCPServer):
                 self.dispatch_message(client, msg_reduced, cache)
         self.decide_uplink_publish(msg, sender_uid)
 
+    def handle_incoming_publish(self, msg, sender_uid):
+        """
+        Handles an incoming publish. This method is normally called by the
+        clients a mechanism of notifying the server that there is a new message
+        to be processed. The processing itself consists of retaining the message
+        according with the `msg.retain` flag and broadcasting it to the
+        subscribers.
+
+        :param Publish msg: The Publish message to be processed.
+        :param MQTTClient sender: The client which sent the message.
+        """
+        assert isinstance(sender_uid, str)
+
+        if msg.retain is True:
+            self._retained_messages.save(msg, sender_uid)
+
+        # access_log.info("[.....] broadcasting payload: \"%s\"" % msg.payload)
+        self.broadcast_message(msg, sender_uid)
+
     def handle_incoming_subscribe(self, mask, engine, qos, sender_uid):
     #def track_client_subscription(self, mask, client_uid):
         assert isinstance(mask, str)
@@ -461,51 +480,6 @@ class MQTTServer(TCPServer):
                 del self.hacked_subs_dict[mask]
                 # last client deleted. TODO broker should unsubscribe this mask now.
 
-    def forward_subscription(self, subscription_mask, granted_qos, sender_uid):
-        """
-        :param subscription_mask: subscription_mask (might have with wildcards)
-        :param sender_uid: sender's ID, don't send subscription back there!
-        :return: FIXME (not specified yet)
-        """
-        raise DeprecationWarning("maybe: handle_incoming_subscribe() ?")
-
-    def disconnect_client(self, client):
-        """
-        Disconnects a MQTT client. Can be safely called without checking if the
-        client is connected.
-
-        :param MQTTClient client: The MQTTClient to be disconnect
-        """
-        assert isinstance(client, MQTTClient)
-        client.disconnect()
-
-    def disconnect_all_clients(self):
-        """ Disconnect all known clients. """
-
-        # The tuple() is needed because the dictionary could change during the
-        # iteration
-        for client in tuple(self.clients.values()):
-            self.disconnect_client(client)
-
-    def handle_incoming_publish(self, msg, sender_uid):
-        """
-        Handles an incoming publish. This method is normally called by the
-        clients a mechanism of notifying the server that there is a new message
-        to be processed. The processing itself consists of retaining the message
-        according with the `msg.retain` flag and broadcasting it to the
-        subscribers.
-
-        :param Publish msg: The Publish message to be processed.
-        :param MQTTClient sender: The client which sent the message.
-        """
-        assert isinstance(sender_uid, str)
-
-        if msg.retain is True:
-            self._retained_messages.save(msg, sender_uid)
-
-        # access_log.info("[.....] broadcasting payload: \"%s\"" % msg.payload)
-        self.broadcast_message(msg, sender_uid)
-
     def enqueue_retained_message(self, client, subscription_mask):
         """
         Enqueues all retained messages matching the `subscription_mask` to be
@@ -535,6 +509,32 @@ class MQTTServer(TCPServer):
                     msg_copy = msg_obj.copy()
                     msg_copy.qos = qos
                     client.publish(msg_copy)
+
+    def forward_subscription(self, subscription_mask, granted_qos, sender_uid):
+        """
+        :param subscription_mask: subscription_mask (might have with wildcards)
+        :param sender_uid: sender's ID, don't send subscription back there!
+        :return: FIXME (not specified yet)
+        """
+        raise DeprecationWarning("maybe: handle_incoming_subscribe() ?")
+
+    def disconnect_client(self, client):
+        """
+        Disconnects a MQTT client. Can be safely called without checking if the
+        client is connected.
+
+        :param MQTTClient client: The MQTTClient to be disconnect
+        """
+        assert isinstance(client, MQTTClient)
+        client.disconnect()
+
+    def disconnect_all_clients(self):
+        """ Disconnect all known clients. """
+
+        # The tuple() is needed because the dictionary could change during the
+        # iteration
+        for client in tuple(self.clients.values()):
+            self.disconnect_client(client)
 
 
 class stream_handle_context():
