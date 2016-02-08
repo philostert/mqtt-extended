@@ -326,43 +326,38 @@ class MQTTServer(TCPServer):
         4. Assert that all types fit
         5. Send new topic to upstream
         """
+
+        # 0.
+        msg.retain = True
+
+        # 1.
         try:
             self.topic_tracker.add_topic(msg.topic, sender_uid)
         except (BeginTracking):
             print("NEW TOPIC: \"%s\"\n" % (msg.topic))
             self.topic_tracker.print()
+
+            # TODO check first publish against known subsciptions: maybe send subscribe to publisher!
+            # 2.
+            if not self.has_uplink():
+                client_logger.debug("cancel: decide_uplink_publish() - has no uplink!")
+                return
+            assert isinstance(self.uplink, MQTTClient)
+            assert isinstance(msg, Publish)
+
+            # 3. don't send it back where it came from
+            if self.uplink.uid == sender_uid:
+                client_logger.debug("cancel: decide_uplink_publish() - uplink transmitted the message")
+                return
+            # 5.
+            client_logger.info("Announcing %s" % msg.topic)
+            self.uplink.send_packet(msg)
+
         except (Exception) as e:
             print("ERROR Exception: %s" % (e))
-
-        # 0.
-        msg.retain = True
-        # 1.
-        if not (msg.topic, msg.qos) in self.hacked_topic_list:
-            client_logger.debug("New Topic: {} QoS: {} Payload: {}".format(msg.topic, msg.qos, msg.payload))
-            self.hacked_topic_list.append((msg.topic, msg.qos))
+            return
         else:
-            return # already announced once
-        # TODO check first publish against known subsciptions: maybe send subscribe to publisher!
-        # 2.
-        if not self.has_uplink():
-            client_logger.debug("cancel: decide_uplink_publish() - has no uplink!")
-            return
-        # 3. don't send it back where it came from
-        if self.uplink.uid == sender_uid:
-            client_logger.debug("cancel: decide_uplink_publish() - uplink transmitted the message")
-            return
-        # announce only: keep track of (topic, qos) and announce only once
-        # 4.
-        assert isinstance(self.uplink, MQTTClient)
-        assert isinstance(msg, Publish)
-        # 5.
-        client_logger.info("Announcing %s" % msg.topic)
-        self.uplink.send_packet(msg)
-        # XXX announce via shorter route; try long route to test long route in general
-        # self.uplink.send_packet(msg) # long route
-        # self.paho_partner_pair.announce(msg.topic, msg.qos) # shorter route
-        #self.paho_partner_pair.announce(msg)
-        # shorter route
+            pass # already announced once
 
     def broadcast_message(self, msg, sender_uid):
         """
@@ -417,7 +412,6 @@ class MQTTServer(TCPServer):
         self.broadcast_message(msg, sender_uid)
 
     def handle_incoming_subscribe(self, mask, engine, qos, sender_uid):
-    #def track_client_subscription(self, mask, client_uid):
         assert isinstance(mask, str)
         #assert isinstance(engine, _sre.SRE_Pattern)
         assert isinstance(qos, int)
@@ -465,7 +459,6 @@ class MQTTServer(TCPServer):
             print("%s" % e)
 
     def handle_incoming_unsubscribe(self, mask, sender_uid):
-    #def untrack_client_subscription(self, mask, client_uid):
         try:
             self.sub_tracker.remove_subscription(mask, sender_uid)
         except (EndTracking, Exception) as e:

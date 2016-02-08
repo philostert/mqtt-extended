@@ -66,17 +66,53 @@ class TopicTracker(Tracker):
         else:
             target.origin = origin # just update origin
 
+    def get_all_topics(self):
+        topics = {}
+
+        path = ''
+        node_stack = [(self._level0, path)] #== [(node, path)]
+        while node_stack:
+            node, path = node_stack.pop()
+            for k,n in node.levels.items():
+                node_stack.append((n, "%s/%s" % (path, k)))
+            if node.origin:
+                topics[path[1:]] = node.origin
+        return topics
+
+    def get_matching_topics(self, mask):
+        '''
+        Uses graph Depth-First-Search algorithm to find and collect matching announced topics.
+        Each topic only appears once.
+        :param mask:
+        :return:
+        '''
+        assert isinstance(mask, str)
+        if not re_match_valid_mask.match(mask):
+            raise ValueError
+
+        matches = {}
+        engine = re.compile(mask)
+        topics = self.get_all_topics()
+        for t, o in topics.items():
+            if engine.match(t):
+                matches[t] = o
+        return matches
+
     def print(self):
+        '''
         print("PRINTING TopicTracker contents:")
         path = ''
         node_stack = [(self._level0, path)] #== [(node, path)]
         while node_stack:
             node, path = node_stack.pop()
-            # searching at most three sub-nodes: the literal, '+' and '#'
             for k,n in node.levels.items():
                 node_stack.append((n, "%s/%s" % (path, k)))
             if node.origin:
-                print ("Topic: \"%s\"  (by %s)" % (path[1:], node.origin))
+                print ("Topic: \"%s\"  (origin: %s)" % (path[1:], node.origin))
+        '''
+        topics = self.get_all_topics()
+        for t, o in topics.items():
+            print ("Topic: \"%s\"  (origin: %s)" % (t, o))
 
 
 # FIXME don't ask, tell! Let the tracker also do publication forwards?!
@@ -166,7 +202,7 @@ class SubMaskTracker(Tracker):
         collected = type(self._level0.subscriptions)()
 
         publish_topic_levels = topic.split("/")
-        final_depth = len(publish_topic_levels)
+        final_depth = len(publish_topic_levels)-1
         node_stack = [(self._level0, 0)] #== [(node, holding_depth)]
         while node_stack:
             node, holding_depth = node_stack.pop()
@@ -182,7 +218,6 @@ class SubMaskTracker(Tracker):
         return collected
 
     def print(self):
-        print("PRINTING SubMaskTracker contents:")
         path = ''
         node_stack = [(self._level0, path)] #== [(node, path)]
         while node_stack:
