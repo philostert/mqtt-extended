@@ -352,8 +352,7 @@ class Subscribe(BaseMQTTMessage):
     def generate_single_sub(cls, topic, qos):
         print("generating SUBSCRIBE with qos, topic: %d, \"%s\"" % (qos,topic))
         msg = Subscribe()
-        # TODO generate random or safe msg.id
-        msg.id = uuid.uuid4().int # if 128 bit integer is too big to downscale: append: >> 64
+        msg.id = uuid.uuid4().int >> 114 # XXX 128 bit integer is too big to downscale: append: >> ...
         msg.subscription_intents = [(topic, qos)]
         return msg
 
