@@ -114,7 +114,6 @@ class TopicTracker(Tracker):
         for t, o in topics.items():
             print ("Topic: \"%s\"  (origin: %s)" % (t, o))
 
-
 # FIXME don't ask, tell! Let the tracker also do publication forwards?!
 class SubMaskTracker(Tracker):
     class _Level:

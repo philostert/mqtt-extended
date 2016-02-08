@@ -422,21 +422,26 @@ class MQTTServer(TCPServer):
         except (BeginTracking) as e:
             client_logger.info("New subscription mask \"%s\", distribute it." % mask)
             matching_topics = self.topic_tracker.get_matching_topics(mask)
+            contains_wildcards = bool(mask.find('+')) or bool(mask.find('#'))
 
             # create Subscribe message and send it to brokers
             msg = Subscribe.generate_single_sub(mask, qos)
 
-            # get each client where a matching topic came from and forward the subscription as is if broker-client.
-            for topic, origin_uid in matching_topics:
-                assert isinstance(origin_uid, str)
-                client = self.clients.get(origin_uid)
-                if client is not None and client.is_broker():
-                    client.write(msg)
+            broker_clients = [c for uid, c in self.clients.items() if c.is_broker() and not uid == sender_uid]
+            if contains_wildcards:
+                for b in broker_clients:
+                    b.write(msg)
+            else:
+                # get each client where a matching topic came from and forward the subscription as is if broker-client.
+                for topic, origin_uid in matching_topics:
+                    assert isinstance(origin_uid, str)
+                    client = self.clients.get(origin_uid)
+                    if client in broker_clients:
+                        client.write(msg)
 
             # forward to uplink if it's likely to get more matches from there
-            if self.has_uplink():
-                mask_contains_wildcards = bool(mask.find('+')) or bool(mask.find('#'))
-                if mask_contains_wildcards or not matching_topics:
+            if self.has_uplink() and not self.uplink.uid == sender_uid:
+                if contains_wildcards or not matching_topics:
                     self.uplink.write(msg)
 
         except (Exception) as e:
