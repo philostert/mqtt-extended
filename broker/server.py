@@ -16,6 +16,11 @@ from broker.persistence import InMemoryPersistence
 from paho.mqtt.extended_client import Extended_Client
 from paho.mqtt.paho_partner_pair import Paho_Partner_Pair
 
+from broker.exceptions import BeginTracking, EndTracking
+import traceback
+
+from broker.tracker import SubMaskTracker, TopicTracker
+
 client_logger = getLogger('activity.clients')
 
 access_log.debug = access_log.info # FIXME trying to prevent bug with more logging, remove this line when fixed
@@ -47,6 +52,9 @@ class MQTTServer(TCPServer):
         self.hacked_subs_dict = dict()
         self.paho_partner_pair = None  # Paho_Partner_Pair(external_address="m2m.eclipse.org")
         self.uplink = None  # self.paho_partner_pair.internal_client
+
+        self.sub_tracker = SubMaskTracker()
+        self.topic_tracker = TopicTracker()
 
     def register_paho_partner_pair(self, pair):  # pair: Paho_Partner_Pair):
         assert isinstance(pair, Paho_Partner_Pair)
@@ -318,6 +326,14 @@ class MQTTServer(TCPServer):
         4. Assert that all types fit
         5. Send new topic to upstream
         """
+        try:
+            self.topic_tracker.add_topic(msg.topic, sender_uid)
+        except (BeginTracking):
+            print("NEW TOPIC: \"%s\"\n" % (msg.topic))
+            self.topic_tracker.print()
+        except (Exception) as e:
+            print("ERROR Exception: %s" % (e))
+
         # 0.
         msg.retain = True
         # 1.
@@ -366,6 +382,10 @@ class MQTTServer(TCPServer):
 
         cache = {}
 
+        subs = self.sub_tracker.get_subscriptions(msg.topic)
+        print(">> subs for topic\"%s\":\n" % msg.topic, subs)
+        self.sub_tracker.print()
+
         for client in self.clients.values():
             # XXX Packet loop restriction #4: no forwarding to sender if sender
             # also receives subscriptions.
@@ -383,6 +403,13 @@ class MQTTServer(TCPServer):
         #assert isinstance(engine, _sre.SRE_Pattern)
         assert isinstance(qos, int)
         assert isinstance(sender_uid, str)
+
+        try:
+            self.sub_tracker.add_subscription(mask, qos, sender_uid)
+        except (BeginTracking, Exception) as e:
+            print("%s" % e)
+            #print(traceback.format_exc())
+        self.sub_tracker.print()
 
         if mask in self.hacked_subs_dict:
             # subscription should have been forwarded already
@@ -420,6 +447,13 @@ class MQTTServer(TCPServer):
 
     def handle_incoming_unsubscribe(self, mask, sender_uid):
     #def untrack_client_subscription(self, mask, client_uid):
+        try:
+            self.sub_tracker.remove_subscription(mask, sender_uid)
+        except (EndTracking, Exception) as e:
+            print("%s" % e)
+            #print(traceback.format_exc())
+        self.sub_tracker.print()
+
         if mask in self.hacked_subs_dict:
             assert isinstance(self.hacked_subs_dict[mask], list)
             self.hacked_subs_dict[mask].remove(sender_uid)

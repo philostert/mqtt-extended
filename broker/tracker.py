@@ -11,14 +11,73 @@ re_match_valid_mask = re.compile(r'^([+#]|%(l)s+)$|^(([+]|%(l)s*)/(([+]|%(l)s*)/
 re_match_valid_topic_literal = re.compile(r'^(%(l)s+|/)+$' %
                                  {'l': r'[^+#/\u0000\ud800-\udfff\u0001-\u001f\u007f-\u009f]'}) #group: allowed literals
 
-class Tracker:
+class Tracker: # FIXME classify as abstract
     def __init__(self):
-        pass
+        self._level0 = None
 
+    def _get_target_level_node(self, path, create=False):
+        '''
+        Walks along the tree nodes and retrieves the target level node.
+        Raises KeyError if path not found when 'create'==False.
+        '''
+        assert isinstance(path, str)
+
+        topic_levels = path.split("/")
+        node = self._level0
+        for key in topic_levels:
+            # create sub-level if necessary
+            if key not in node.levels:
+                if create:
+                    node.levels[key] = self._Level()
+                else:
+                    raise KeyError("Path not found.")
+            node = node.levels[key] # move on
+        assert isinstance(node, type(self._level0))
+        return node # target node found
 
 class TopicTracker(Tracker):
+    class _Level:
+        def __init__(self):
+            self.levels = dict()
+            self.origin = None
+
+
     def __init__(self):
         super().__init__()
+        self._level0 = self._Level()
+
+    def add_topic(self, topic, origin):
+        '''
+        :param topic: literal topic
+        :param origin: client uid
+        :return:
+        '''
+        assert isinstance(topic, str)
+        assert isinstance(origin, str)
+
+        if not re_match_valid_topic_literal.match(topic):
+            raise ValueError("Corrupted topic.")
+
+        # create path if necessary
+        target = self._get_target_level_node(topic, create=True)
+        if not bool(target.origin):
+            target.origin = origin
+            raise BeginTracking("first Announcement: %s" % topic)
+        else:
+            target.origin = origin # just update origin
+
+    def print(self):
+        print("PRINTING TopicTracker contents:")
+        path = ''
+        node_stack = [(self._level0, path)] #== [(node, path)]
+        while node_stack:
+            node, path = node_stack.pop()
+            # searching at most three sub-nodes: the literal, '+' and '#'
+            for k,n in node.levels.items():
+                node_stack.append((n, "%s/%s" % (path, k)))
+            if node.origin:
+                print ("Topic: \"%s\"  (by %s)" % (path[1:], node.origin))
+
 
 # FIXME don't ask, tell! Let the tracker also do publication forwards?!
 class SubMaskTracker(Tracker):
@@ -30,37 +89,13 @@ class SubMaskTracker(Tracker):
         def is_empty(self):
             return bool (not self.levels and not self.subscriptions)
 
+        def has_subscriptions(self):
+            return bool (self.subscriptions)
+
     def __init__(self):
         super().__init__()
         self._subscriptions = dict()
         self._level0 = self._Level() # (sublevel, subscribers) # level0 cannot have subscribers, mask would be ''
-
-    def _get_target_level_node(self, mask, create=False):
-        '''
-        Walks along the tree nodes and retrieves the target level node.
-        Raises ValueError for invalid masks.
-        Raises IndexError if mask not found when 'create'==False.
-        :param mask:
-        :param create:
-        :return:
-        '''
-        assert isinstance(mask, str)
-
-        if not re_match_valid_mask.match(mask):
-            raise ValueError("Corrupted mask.")
-
-        topic_levels = mask.split("/")
-        node = self._level0
-        for key in topic_levels:
-            # create sub-level if necessary
-            if key not in node.levels:
-                if create:
-                    node.levels[key] = self._Level()
-                else:
-                    raise IndexError("Subscription mask not found.")
-            node = node.levels[key] # move on
-        assert isinstance(node, type(self._level0))
-        return node # target node found
 
     def add_subscription(self, mask, qos, client):
         '''
@@ -74,28 +109,45 @@ class SubMaskTracker(Tracker):
         assert isinstance(mask, str)
         assert isinstance(qos, int)
         assert (0x80 != qos) # SUBACK value for Failure is 0x80
-        assert isinstance(client, MQTTClient)
+        #assert isinstance(client, MQTTClient) TODO use MQTTClient ?
+        assert isinstance(client, str) # uid
+
+        if not re_match_valid_mask.match(mask):
+            raise ValueError("Corrupted mask.")
 
         target_node = self._get_target_level_node(mask, create=True)
+        # check whether this subscription is the only one for this mask
+        first = not target_node.has_subscriptions()
         target_node.subscriptions[client] = qos
+        if first:
+            raise BeginTracking("first Subscription: %s" % mask)
 
     def remove_subscription(self, mask, client):
         '''
         Removes a subscription of a client.
         Raises ValueError for invalid masks.
-        Raises IndexError if mask not found.
+        Raises KeyError if mask not found.
         :param mask: subscription mask, basically a topic with possible wildcards
         :param client:
         :return:
         '''
+        assert isinstance(mask, str)
+        #assert isinstance(client, MQTTClient) TODO use MQTTClient ?
+        assert isinstance(client, str) # uid
+
+        if not re_match_valid_mask.match(mask):
+            raise ValueError("Corrupted mask.")
+
         try:
             target_node = self._get_target_level_node(mask)
             del target_node.subscriptions[client]
-        except IndexError:
+            if not target_node.has_subscriptions():
+                raise EndTracking
+        except (KeyError):
             pass # ignore if subscription was not there
 
     def _merge_subscriptions_into(self, collection, addition):
-        for client, qos in addition:
+        for client, qos in addition.items():
             if client not in collection or qos > collection[client]:
                 collection[client] = qos
 
@@ -128,3 +180,15 @@ class SubMaskTracker(Tracker):
                 else:
                     node_stack.append((sub_node, holding_depth +1))
         return collected
+
+    def print(self):
+        print("PRINTING SubMaskTracker contents:")
+        path = ''
+        node_stack = [(self._level0, path)] #== [(node, path)]
+        while node_stack:
+            node, path = node_stack.pop()
+            # searching at most three sub-nodes: the literal, '+' and '#'
+            for k,n in node.levels.items():
+                node_stack.append((n, "%s/%s" % (path, k)))
+            for uid, qos in node.subscriptions.items():
+                print ("SUB: %d \"%s\"  (by %s)" % (qos, path[1:], uid))
