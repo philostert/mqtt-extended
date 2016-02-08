@@ -20,90 +20,81 @@ class TopicTracker(Tracker):
     def __init__(self):
         super().__init__()
 
-def foo(mask, qos, client):
-    pass
-    topic_levels = mask.split("/")
-
-
-# FIXME don't ask, tell! Let the tracker also do forwarding decisions and their execution?!
+# FIXME don't ask, tell! Let the tracker also do publication forwards?!
 class SubMaskTracker(Tracker):
-    '''
-    class _LevelEntry:
-        def __init__(self, level_name):
-            self._sublevels = dict()        # topic level key e.g. '+', '#', 'temperature'  => _LevelEntry
-            self._subscriptions = dict()    # client.uid  => qos
-            self._match_all = False
-            if level_name == '#':
-                self._match_all = True
-
-        def get_subscriptions(self, subsequent_levels):
-            if not subsequent_levels or self._match_all:
-                return self._subscriptions.copy()
-            else:
-                assert (subsequent_levels, list)
-                # cut list and determine next sub levels to walk
-                subsequent_levels = subsequent_levels.copy()
-                next_literal = subsequent_levels.pop(0)
-                next_levels = {key for key in {'+', '#', next_literal} if key in self._sublevels}
-
-                # create new mapping where all subscriptions are merged
-                matches = type(self._subscriptions)()
-                for key in next_levels:
-                    additional_matches = self._sublevels[key].get_subscriptions(subsequent_levels)
-                    # get maximum qos for each
-                    for client, qos in additional_matches:
-                        if client not in matches or qos > matches[client]:
-                            matches[client] = qos
-                return matches
-
-        def add_client(self, qos, uid):
-            assert isinstance(qos, int)
-            assert isinstance(uid, str)
-            assert (0x80 != qos) # SUBACK value for Failure is 0x80
-            # TODO broker might want to forward subscription with other qos now; i don't care
-            self._subs[uid] = qos
-
-        def remove_client(self, uid):
-            del self._subs[uid]
-
-        def is_empty(self):
-            return bool(self._subs)
-    '''
     class _Level:
         def __init__(self):
             self.levels = dict()
             self.subscriptions = dict()
+
+        def is_empty(self):
+            return bool (not self.levels and not self.subscriptions)
 
     def __init__(self):
         super().__init__()
         self._subscriptions = dict()
         self._level0 = self._Level() # (sublevel, subscribers) # level0 cannot have subscribers, mask would be ''
 
-    def add_sub(self, mask, qos, client):
+    def _get_target_level_node(self, mask, create=False):
         '''
-        Adds or updates a subscription mask with the corresponding QoS.
-        :param mask: subscription mask
-        :param qos:
-        :param client:
+        Walks along the tree nodes and retrieves the target level node.
+        Raises ValueError for invalid masks.
+        Raises IndexError if mask not found when 'create'==False.
+        :param mask:
+        :param create:
         :return:
         '''
         assert isinstance(mask, str)
-        assert isinstance(qos, int)
-        assert isinstance(client, MQTTClient)
+
         if not re_match_valid_mask.match(mask):
-            raise ValueError
+            raise ValueError("Corrupted mask.")
 
         topic_levels = mask.split("/")
         node = self._level0
         for key in topic_levels:
             # create sub-level if necessary
             if key not in node.levels:
-                node.levels[key] = self._Level()
+                if create:
+                    node.levels[key] = self._Level()
+                else:
+                    raise IndexError("Subscription mask not found.")
             node = node.levels[key] # move on
-        # update subscription on target node
-        node.subscriptions[client] = qos
+        assert isinstance(node, type(self._level0))
+        return node # target node found
 
-    def _collect_subscriptions_into(self, collection, addition):
+    def add_subscription(self, mask, qos, client):
+        '''
+        Adds or updates a subscription mask with the corresponding QoS.
+        Raises ValueError for invalid masks.
+        :param mask: subscription mask, basically a topic with possible wildcards
+        :param qos: Quality of Service
+        :param client: client which subscribes topic/mask
+        :return:
+        '''
+        assert isinstance(mask, str)
+        assert isinstance(qos, int)
+        assert (0x80 != qos) # SUBACK value for Failure is 0x80
+        assert isinstance(client, MQTTClient)
+
+        target_node = self._get_target_level_node(mask, create=True)
+        target_node.subscriptions[client] = qos
+
+    def remove_subscription(self, mask, client):
+        '''
+        Removes a subscription of a client.
+        Raises ValueError for invalid masks.
+        Raises IndexError if mask not found.
+        :param mask: subscription mask, basically a topic with possible wildcards
+        :param client:
+        :return:
+        '''
+        try:
+            target_node = self._get_target_level_node(mask)
+            del target_node.subscriptions[client]
+        except IndexError:
+            pass # ignore if subscription was not there
+
+    def _merge_subscriptions_into(self, collection, addition):
         for client, qos in addition:
             if client not in collection or qos > collection[client]:
                 collection[client] = qos
@@ -133,48 +124,7 @@ class SubMaskTracker(Tracker):
                 assert isinstance(sub_node, self._Level)
                 if key == '#' or holding_depth == final_depth:
                     # no need to look any deeper there, get subscriptions
-                    self._collect_subscriptions_into(collected, sub_node.subscriptions)
+                    self._merge_subscriptions_into(collected, sub_node.subscriptions)
                 else:
                     node_stack.append((sub_node, holding_depth +1))
         return collected
-
-
-
-    def add(self, mask, engine, qos, uid):
-        assert isinstance(mask, str)
-        #assert isinstance(engine, _sre.SRE_Pattern)
-        assert isinstance(qos, int)
-        assert isinstance(uid, str)
-
-        if mask in self._subscriptions:
-            # subscription should have been forwarded already
-            assert isinstance(self._subscriptions[mask], self._SubMaskTrackerEntry)
-            self._subscriptions[mask].add_client(qos, uid)
-            return
-
-        # new management entry
-        self._subscriptions[mask] = self._SubMaskTrackerEntry(engine)
-        self._subscriptions[mask].add_client(qos, uid)
-
-        raise BeginTracking
-
-    def remove(self, mask, uid):
-        assert isinstance(mask, str)
-        assert isinstance(uid, str)
-
-        self._subscriptions[mask].remove_client(uid)
-        if self._subscriptions[mask].is_empty():
-            raise EndTracking
-
-    def matching_masks(self, topicname): # FIXME don't ask, tell what to do!
-        """
-        FIXME write proper description:
-        this method should be called when there is a new topic announced,
-        in order to find early subscribers for it.
-        :param topicname: a plain topic name (not containing wildcards)
-        :return: set of subscribed masks
-        """
-        assert ('+' not in topicname)
-        assert ('#' not in topicname)
-        # TODO find and return matching masks (with uids?)
-        raise NotImplementedError
