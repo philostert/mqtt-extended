@@ -419,19 +419,29 @@ class MQTTServer(TCPServer):
 
         try:
             self.sub_tracker.add_subscription(mask, qos, sender_uid)
-        except (BeginTracking, Exception) as e:
-            print("%s" % e)
-            #print(traceback.format_exc())
+        except (BeginTracking) as e:
+            client_logger.info("New subscription mask \"%s\", distribute it." % mask)
+            matching_topics = self.topic_tracker.get_matching_topics(mask)
+
+            # create Subscribe message and send it to brokers
+            msg = Subscribe.generate_single_sub(mask, qos)
+
+            # get each client where a matching topic came from and forward the subscription as is if broker-client.
+            for topic, origin_uid in matching_topics:
+                assert isinstance(origin_uid, str)
+                client = self.clients.get(origin_uid)
+                if client is not None and client.is_broker():
+                    client.write(msg)
+
+            # forward to uplink if it's likely to get more matches from there
+            if self.has_uplink():
+                mask_contains_wildcards = bool(mask.find('+')) or bool(mask.find('#'))
+                if mask_contains_wildcards or not matching_topics:
+                    self.uplink.write(msg)
+
+        except (Exception) as e:
+            client_logger.error("ERROR EXCEPTION: %s" % e)
         self.sub_tracker.print()
-
-        if mask in self.hacked_subs_dict:
-            # subscription should have been forwarded already
-            assert isinstance(self.hacked_subs_dict[mask], list)
-            self.hacked_subs_dict[mask].append(sender_uid)
-            return
-
-        # new list of subscribers
-        self.hacked_subs_dict[mask] = [sender_uid]
 
         '''
         forwarding decision making:
@@ -448,15 +458,7 @@ class MQTTServer(TCPServer):
         #access_log.debug("decide subscription forwarding from: \"%s\" for \"%s\"" % (sender_uid, subscription_mask))
         # TODO check subscribe against known topics 'hacked_topic_list'
 
-        # create Subscribe message and send it to brokers
-        try:
-            msg = Subscribe.generate_single_sub(mask, qos)
-            # TODO send subs forward according to "the rules"
-            if self.has_uplink():
-                self.uplink.write(msg) # TODO change this testing line
-            return
-        except Exception as e:
-            print("%s" % e)
+
 
     def handle_incoming_unsubscribe(self, mask, sender_uid):
         try:
