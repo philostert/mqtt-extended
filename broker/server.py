@@ -341,6 +341,7 @@ class MQTTServer(TCPServer):
             self.topic_tracker.add_topic(msg.topic, sender_uid)
         except (BeginTracking):
             print("NEW TOPIC: \"%s\"\n" % (msg.topic))
+            assert (not '$' == msg.topic[:1])
 
             for topic,origin in self.topic_tracker.iterator():
                 print("topic \"%s\" provided by %s" % (topic,origin))
@@ -441,6 +442,9 @@ class MQTTServer(TCPServer):
         try:
             self.sub_tracker.add_subscription(mask, qos, sender_uid)
         except (BeginTracking) as e:
+            if mask[:1] == '$': # skip special masks
+                client_logger.info("New special subscription mask \"%s\", won't distribute." % mask)
+                return
             client_logger.info("New subscription mask \"%s\", distribute it." % mask)
             matching_topics = self.topic_tracker.get_matching_topics(mask)
             contains_wildcards = bool(mask.find('+')) or bool(mask.find('#'))
