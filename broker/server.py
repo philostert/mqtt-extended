@@ -442,27 +442,25 @@ class MQTTServer(TCPServer):
                 client_logger.info("New special subscription mask \"%s\", won't distribute." % mask)
                 return
             client_logger.info("New subscription mask \"%s\", distribute it." % mask)
-            matching_topics = self.topic_tracker.get_matching_topics(mask)
             contains_wildcards = bool(mask.find('+')) or bool(mask.find('#'))
 
             # create Subscribe message and send it to brokers
             msg = Subscribe.generate_single_sub(mask, qos)
-
             broker_clients = [c for uid, c in self.clients.items() if c.is_broker() and not uid == sender_uid]
-            if False and contains_wildcards: # FIXME condition. but i think this case isn't needed. broker subscribe on announcement
-                for b in broker_clients:
-                    b.write(msg)
-            else:
-                # get each client where a matching topic came from and forward the subscription as is if broker-client.
-                for topic, origin_uid in matching_topics.items():
-                    assert isinstance(origin_uid, str)
-                    client = self.clients.get(origin_uid)
-                    if client in broker_clients:
-                        client.write(msg)
+
+            found_matching_topic = False
+            # get each broker-client where a matching topic came from and forward the subscription.
+            for topic, origin_uid in self.topic_tracker.match_mask_iterator(mask):
+                found_matching_topic = True
+                assert isinstance(origin_uid, str)
+                client = self.clients.get(origin_uid)
+                if client in broker_clients:
+                    client.write(msg)
+            client_logger.info("End match mask iterator for mask \"%s\"" % mask)
 
             # forward to uplink if it's likely to get more matches from there
             if self.has_uplink() and not self.uplink.uid == sender_uid:
-                if contains_wildcards or not matching_topics:
+                if contains_wildcards or not found_matching_topic:
                     self.uplink.write(msg)
 
         except (Exception) as e:

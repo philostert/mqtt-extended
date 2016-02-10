@@ -151,10 +151,10 @@ class TopicTracker(Tracker):
             self.origin = None
 
     class _TopicIterator:
-        def __init__(self, node):
+        def __init__(self, node, match_mask=None):
             assert isinstance(node, TopicTracker._TreeNode)
             # get a tree node iterator
-            self.tree_iter = node.__iter__()
+            self.tree_iter = TopicTracker._TreeNode._BasicIter(node, match_mask)
 
         def __iter__(self):
             return self
@@ -171,17 +171,16 @@ class TopicTracker(Tracker):
         super().__init__()
 
     def __iter__(self): # XXX Hack, this allows to do such as "for ... in topic_tracker"
-        topic_iter = self._TopicIterator(self._tree)
-        return topic_iter
+        return self.iterator()
 
-    def iterator(self, path=None):
-        if path:
-            assert isinstance(path, str)
-            # might raise Exception, intended
-            node = self._tree.relative_node(path)
-        else:
-            node = self._tree
-        return self._TopicIterator(node)
+    def iterator(self):
+        return self._TopicIterator(self._tree)
+
+    def match_mask_iterator(self, match_mask):
+        assert isinstance(match_mask, str)
+        if not re_match_valid_mask.match(match_mask):
+            raise ValueError
+        return self._TopicIterator(self._tree, match_mask)
 
     def _iterator_by_node(self, node):
         assert isinstance(node, self._TreeNode)
@@ -218,6 +217,7 @@ class TopicTracker(Tracker):
         :param mask:
         :return:
         '''
+        raise DeprecationWarning('use match_mask_iterator !')
         assert isinstance(mask, str)
         if not re_match_valid_mask.match(mask):
             raise ValueError
