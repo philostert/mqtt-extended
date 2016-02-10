@@ -13,6 +13,7 @@ from broker.messages import Publish, Connect, Connack, Subscribe
 from broker.connection import MQTTConnection
 from broker.factory import MQTTMessageFactory
 from broker.persistence import InMemoryPersistence
+from broker.util import MQTTUtils
 from paho.mqtt.extended_client import Extended_Client
 from paho.mqtt.paho_partner_pair import Paho_Partner_Pair
 
@@ -387,9 +388,11 @@ class MQTTServer(TCPServer):
         msg_reduced.retain = False
 
         cache = {}
+        random = MQTTUtils.random_int16()
 
         subscriptions = self.sub_tracker.get_subscriptions(msg.topic)
         for client_uid, granted_qos in subscriptions.items():
+            client_logger.info("Broadcast-%s [uid: %s] subscription with %d" % (random, client_uid, granted_qos))
             if not client_uid in self.clients:
                 client_logger.error("[uid: %s] deleted client still has subscriptions!" % client_uid)
                 continue

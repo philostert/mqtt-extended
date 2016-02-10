@@ -1,4 +1,5 @@
 import re
+import uuid
 from hashlib import sha256
 
 from broker import MQTTConstants
@@ -126,6 +127,11 @@ class MQTTUtils:
 
         return bytes_
 
+    @classmethod
+    def random_int16(cls):
+        # TODO make more efficient
+        ran = uuid.uuid4().int >> 112
+        return ran
 
 class HaltObject():
     """

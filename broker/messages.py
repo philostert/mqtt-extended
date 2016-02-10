@@ -1,5 +1,4 @@
 import copy
-import uuid
 from itertools import chain
 from broker import MQTTConstants
 
@@ -352,7 +351,7 @@ class Subscribe(BaseMQTTMessage):
     def generate_single_sub(cls, topic, qos):
         print("generating SUBSCRIBE with qos, topic: %d, \"%s\"" % (qos,topic))
         msg = Subscribe()
-        msg.id = uuid.uuid4().int >> 114 # XXX 128 bit integer is too big to downscale: append: >> ...
+        msg.id = MQTTUtils.random_int16()
         msg.subscription_intents = [(topic, qos)]
         return msg
 
