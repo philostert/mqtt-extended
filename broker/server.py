@@ -287,11 +287,9 @@ class MQTTServer(TCPServer):
             del self.clients[client.uid]
             access_log.info("[uid: %s] session cleaned" % client.uid)
 
-    def dispatch_message(self, client, msg, cache=None):
+    def dispatch_publish(self, client, msg, granted_qos, cache=None):
         """
-        Dispatches a message to a client based on its subscriptions. It is safe
-        to call this method without checking if the client has matching
-        subscriptions.
+        Dispatches a publish message as is to a client or drops it.
 
         :param MQTTClient client: The client which will possibly receive the
           message;
@@ -304,22 +302,19 @@ class MQTTServer(TCPServer):
         assert client.uid in self.clients
 
         cache = cache if cache is not None else {}
-        qos_list = client.get_list_of_delivery_qos(msg)
 
-        for qos in qos_list:
+        # If the client is not connected, drop QoS 0 messages
+        if client.is_connected() or \
+                        granted_qos > MQTTConstants.AT_MOST_ONCE:
 
-            # If the client is not connected, drop QoS 0 messages
-            if client.is_connected() or \
-                            qos > MQTTConstants.AT_MOST_ONCE:
+            if granted_qos not in cache:
+                msg_copy = msg.copy()
+                msg_copy.qos = granted_qos
+                cache[granted_qos] = msg_copy
 
-                if qos not in cache:
-                    msg_copy = msg.copy()
-                    msg_copy.qos = qos
-                    cache[qos] = msg_copy
+            client.publish(cache[granted_qos])
 
-                client.publish(cache[qos])
-
-    def _communicate_if_new_topic(self, msg, sender_uid, subscriptions):
+    def _communicate_if_new_topic(self, msg, sender_uid):
         '''
         This
         :param sender_uid:
@@ -375,7 +370,7 @@ class MQTTServer(TCPServer):
         else:
             pass # already announced once
 
-    def broadcast_message(self, msg, sender_uid, subscriptions):
+    def broadcast_message(self, msg, sender_uid):
         """
         Broadcasts a message to all clients with matching subscriptions,
         respecting the subscription QoS and restrictions on packet loops.
@@ -393,7 +388,8 @@ class MQTTServer(TCPServer):
 
         cache = {}
 
-        for client_uid, qos in subscriptions.items():
+        subscriptions = self.sub_tracker.get_subscriptions(msg.topic)
+        for client_uid, granted_qos in subscriptions.items():
             if not client_uid in self.clients:
                 client_logger.error("[uid: %s] deleted client still has subscriptions!" % client_uid)
                 continue
@@ -403,9 +399,9 @@ class MQTTServer(TCPServer):
             if client_uid == sender_uid and client.is_broker():
                 continue
             if client.is_broker():
-                self.dispatch_message(client, msg, cache) # brokers get original message
+                self.dispatch_publish(client, msg, granted_qos, cache) # brokers get original message
             else:
-                self.dispatch_message(client, msg_reduced, cache)
+                self.dispatch_publish(client, msg_reduced, granted_qos, cache)
 
     def handle_incoming_publish(self, msg, sender_uid):
         """
@@ -424,15 +420,11 @@ class MQTTServer(TCPServer):
         if msg.retain is True:
             self._retained_messages.save(msg, sender_uid)
 
-        # get subscriptions
-        subscriptions = self.sub_tracker.get_subscriptions(msg.topic)
-        print(">> subs for topic \"%s\":\n" % msg.topic, subscriptions)
-
         # serve subscribers
-        self.broadcast_message(msg, sender_uid, subscriptions)
+        self.broadcast_message(msg, sender_uid)
 
         # maybe tell or subscribe other brokers
-        self._communicate_if_new_topic(msg, sender_uid, subscriptions)
+        self._communicate_if_new_topic(msg, sender_uid)
 
     def handle_incoming_subscribe(self, mask, engine, qos, sender_uid):
         assert isinstance(mask, str)
