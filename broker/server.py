@@ -346,12 +346,13 @@ class MQTTServer(TCPServer):
             for topic,origin in self.topic_tracker.iterator():
                 print("topic \"%s\" provided by %s" % (topic,origin))
 
-            for m,q,id in self.sub_tracker.subscription_iterator(msg.topic):
-                print("subscription \"%s\" %d   from %s" % (m,q,id))
-                provider = self.clients.get(sender_uid)
-                if provider and provider.is_broker():
-                    print("FORWARDING subscription \"%s\" %d   from %s" % (m,q,id))
-                    submsg = Subscribe.generate_single_sub(m, q)
+            # tell providing broker that i want more if that is the case.
+            provider = self.clients.get(sender_uid)
+            if provider and provider.is_broker():
+                for m,q,id in self.sub_tracker.subscription_iterator(msg.topic):
+                    q_forward = 0  # FIXME inline magic, but maybe it's best to have qos=0 among brokers
+                    print("FORWARDING subscription \"%s\" (QoS: was %d, set %d)   from %s" % (m,q,q_forward,id))
+                    submsg = Subscribe.generate_single_sub(m, q_forward)
                     provider.write(submsg)
             # 2.
             if not self.has_uplink():
