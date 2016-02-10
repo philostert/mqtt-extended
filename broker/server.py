@@ -352,16 +352,6 @@ class MQTTServer(TCPServer):
                     print("FORWARDING subscription \"%s\" %d   from %s" % (m,q,id))
                     submsg = Subscribe.generate_single_sub(m, q)
                     provider.write(submsg)
-            """
-            if subscriptions:
-                # FIXME need mask, is not actually returned until now
-                for uid, mask in subscriptions.items():
-                    # TODO FIXME if new topic has matching subscription: subscribe sender !
-                    submsg = Subscribe.generate_single_sub(mask, 0) # FIXME magic
-                    client = self.clients.get(uid)
-                    if client and client.is_broker():
-                        client.write(submsg)
-            """
             # 2.
             if not self.has_uplink():
                 client_logger.debug("cancel: decide_uplink_publish() - has no uplink!")
@@ -478,7 +468,6 @@ class MQTTServer(TCPServer):
         except (Exception) as e:
             traceback.print_exc()
             client_logger.error("ERROR EXCEPTION: %s" % e)
-        self.sub_tracker.print()
 
         '''
         forwarding decision making:
@@ -506,14 +495,6 @@ class MQTTServer(TCPServer):
         except (Exception) as e:
             traceback.print_exc()
             client_logger.error("ERROR EXCEPTION: %s" % e)
-        self.sub_tracker.print()
-
-        if mask in self.hacked_subs_dict:
-            assert isinstance(self.hacked_subs_dict[mask], list)
-            self.hacked_subs_dict[mask].remove(sender_uid)
-            if not self.hacked_subs_dict[mask]: # list is empty
-                del self.hacked_subs_dict[mask]
-                # last client deleted. TODO broker should unsubscribe this mask now.
 
     def enqueue_retained_message(self, client, subscription_mask):
         """
