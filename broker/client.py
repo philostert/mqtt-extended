@@ -46,7 +46,7 @@ class MQTTClient():
 
     def __init__(self, server, connection, authorization=None,
                  uid=None, clean_session=False,
-                 keep_alive=60, persistence=None, receive_subscriptions=None):
+                 keep_alive=60, persistence=None):
 
         self.uid = uid
         self.logger = getLogger('activity.clients')
@@ -60,7 +60,6 @@ class MQTTClient():
         self.connection = None
         self.clean_session = None
         self.keep_alive = None
-        self.receive_subscriptions = False
 
         self.server = server
         self.authorization = authorization or Authorization.no_restrictions()
@@ -68,7 +67,7 @@ class MQTTClient():
         # Queue of the packets ready to be delivered
         self.outgoing_queue = OutgoingQueue(self.persistence.outgoing_publishes)
 
-        self.update_configuration(clean_session, keep_alive, receive_subscriptions)
+        self.update_configuration(clean_session, keep_alive)
         self.update_connection(connection)
 
     @property
@@ -105,7 +104,7 @@ class MQTTClient():
             if not self.connection.closed():
                 self._connected.set()
 
-    def update_configuration(self, clean_session=False, keep_alive=60, receive_subscriptions=None):
+    def update_configuration(self, clean_session=False, keep_alive=60):
         """
         Updates the internal attributes.
 
@@ -116,9 +115,6 @@ class MQTTClient():
         """
         self.clean_session = clean_session
         self.keep_alive = keep_alive
-        # FIXME add parameter to calls of update_configuration(...)
-        if receive_subscriptions is not None:
-            self.receive_subscriptions = receive_subscriptions
 
     def update_authorization(self, authorization):
         self.authorization = authorization
@@ -269,7 +265,7 @@ class MQTTClient():
         """
         try:
             self.outgoing_queue.put_publish(msg)
-            self.logger.error('[uid: %s] Send publish packet to Subscriber with topic %s' % (self.uid, msg.topic))
+            self.logger.debug('[uid: %s] Send publish packet to Subscriber with topic %s' % (self.uid, msg.topic))
         except PacketIdsDepletedError:
             self.logger.error('[uid: %s] Packet IDs depleted' % self.uid)
 
@@ -339,9 +335,10 @@ class MQTTClient():
         elif new_subscription:
             ereg = MQTTUtils.convert_to_ereg(subscription_mask)
             if ereg is not None:
-                self.subscriptions.add(subscription_mask, qos, re.compile(ereg))
+                engine = re.compile(ereg)
+                self.subscriptions.add(subscription_mask, qos, engine)
                 self.server.enqueue_retained_message(self, subscription_mask)
-
+                self.server.handle_incoming_subscribe(subscription_mask, engine, qos, self.uid)
             else:
                 qos = 0x80
         if "#" in subscription_mask:
@@ -357,6 +354,7 @@ class MQTTClient():
         """
         for topic in topics:
             del self.subscriptions[topic]
+            self.server.handle_incoming_unsubscribe(topic, self.uid)
 
     def unsubscribe_denied_topics(self):
         for topic in self.subscriptions.masks:

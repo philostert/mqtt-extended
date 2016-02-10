@@ -1,7 +1,14 @@
 import paho.mqtt.client as mqtt
-# FIXME from broker.factory import MQTTMessageFactory
-
 # Message types
+from broker.factory import MQTTMessageFactory
+from broker.util import MQTTUtils
+
+from logging import getLogger
+
+logger = getLogger('activity.paho')
+# TODO remove logging hack
+logger.debug = logger.info
+
 CONNECT = 0x10
 CONNACK = 0x20
 PUBLISH = 0x30
@@ -28,6 +35,8 @@ MQTT_LOG_DEBUG = 0x10
 MQTT_ERR_SUCCESS = 0
 MQTT_ERR_PROTOCOL = 2
 
+import sys
+
 class Extended_Client(mqtt.Client):
     def __init__(self, partner_pair, client_id="", clean_session=True, userdata=None):#, protocol=MQTTv31):
         super().__init__(client_id, clean_session, userdata)#, protocol)
@@ -37,26 +46,22 @@ class Extended_Client(mqtt.Client):
     def get_uid(self):
         return self._client_id
 
-    def enque_packet(self, binary_packet : bytes):
-        print("enqueueing binary packet")
-        # decode
-        # FIXME import Errors with Message Factory
-        """
-        obj = MQTTMessageFactory.make(binary_packet)
-        print("enqueueing from %s . try forward" % obj.__class__.__name__)
-        cmd = obj.type << 4
+    def enqueue_packet(self, binary_packet : bytes):
+        try:
+            obj = MQTTMessageFactory.make(binary_packet)
+        except:
+            e = sys.exc_info()[0]
+            print(e)
+
+        logger.debug("paho: accepted bytes from partner, interpreting as type %s. enqueueing..." % type(obj))
+        cmd = obj.type << 4 # tegris' constants used by MQTTMessageFactory are different from paho's
         mid = obj.id
         qos = obj.qos
-        """
-        cmd = None
-        mid = None
-        qos = None
 
         # put on wire
         self._packet_queue(cmd, binary_packet, mid, qos)
-        pass
 
-    # _packet_handle function überschreiben
+    # XXX redefining
     def _packet_handle(self):
         cmd = self._in_packet['command']&0xF0
         if cmd == PINGREQ:
@@ -68,7 +73,10 @@ class Extended_Client(mqtt.Client):
         elif cmd == PUBCOMP:
             return self._handle_pubackcomp("PUBCOMP")
         elif cmd == PUBLISH:
-            return self._handle_publish()
+            # send puback and so on
+            self._handle_publish()
+            # forward
+            return self._forward_to_partner()
         elif cmd == PUBREC:
             return self._handle_pubrec()
         elif cmd == PUBREL:
@@ -90,12 +98,21 @@ class Extended_Client(mqtt.Client):
 
     def _handle_subscribe(self):
         # TODO decode packet and send SUBACK
-
-        self.local_interface.pass_packet_to_partner(self._in_packet["packet"], self._client_id)
-        return MQTT_ERR_SUCCESS
+        return self._forward_to_partner()
 
     def _handle_unsubscribe(self):
         # TODO decode packet and send UNSUBACK
+        return self._forward_to_partner()
 
-        self.local_interface.pass_packet_to_partner(self._in_packet["packet"], self._client_id)
+    def _forward_to_partner(self):
+        # paho has cut of some bytes. We are missing 'command' and 'remaining_length':
+        # append and concatenate it again.
+        b_command = self._in_packet['command_byte'] # with flags
+        b_length = MQTTUtils.encode_length(self._in_packet['remaining_length'])
+        b_rest_of_packet = self._in_packet["packet"]
+
+        b_concat = b_command + b_length + b_rest_of_packet
+        logger.debug("paho: forwarding packet to partner. Content is: %s" % (b_concat))
+
+        self.local_interface.pass_packet_to_partner(b_concat, self._client_id)
         return MQTT_ERR_SUCCESS

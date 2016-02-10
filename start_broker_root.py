@@ -89,7 +89,7 @@ def create_ssl_options(options):
 
 
 def start_mqtt_server(persistence, clients,
-                      authentication_agent, log, listen_port=1883, EXTERNAL_ADDRESS="localhost", EXTERNAL_PORT=1993):
+                      authentication_agent, log, listen_port=1993, EXTERNAL_ADDRESS=None, EXTERNAL_PORT=1883):
     #EXTERNAL_ADDRESS = "test.mosquitto.org"
 
     server = MQTTServer(authentication=authentication_agent,

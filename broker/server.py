@@ -13,10 +13,17 @@ from broker.messages import Publish, Connect, Connack, Subscribe
 from broker.connection import MQTTConnection
 from broker.factory import MQTTMessageFactory
 from broker.persistence import InMemoryPersistence
+from paho.mqtt.extended_client import Extended_Client
 from paho.mqtt.paho_partner_pair import Paho_Partner_Pair
+
+from broker.exceptions import BeginTracking, EndTracking
+import traceback
+
+from broker.tracker import SubMaskTracker, TopicTracker
 
 client_logger = getLogger('activity.clients')
 
+access_log.debug = access_log.info # FIXME trying to prevent bug with more logging, remove this line when fixed
 
 class MQTTServer(TCPServer):
     """
@@ -42,20 +49,26 @@ class MQTTServer(TCPServer):
         assert isinstance(self._retained_messages, RetainedMessages)
 
         self.hacked_topic_list = []
+        self.hacked_subs_dict = dict()
         self.paho_partner_pair = None  # Paho_Partner_Pair(external_address="m2m.eclipse.org")
         self.uplink = None  # self.paho_partner_pair.internal_client
+
+        self.sub_tracker = SubMaskTracker()
+        self.topic_tracker = TopicTracker()
 
     def register_paho_partner_pair(self, pair):  # pair: Paho_Partner_Pair):
         assert isinstance(pair, Paho_Partner_Pair)
         self.paho_partner_pair = pair
-        # and a shortcut
-        self.uplink = pair.internal_client
+        # XXX this was wrong!: self.uplink = pair.internal_client
 
     def has_uplink(self):
-        """ checks whether a paho_partner_pair was registered. if so shortcut uplink exists
+        """ checks whether a paho_partner_pair was registered and uplink is
+        represented by a common tegris client object.
         :return:
         """
-        return not self.paho_partner_pair is None
+        if self.paho_partner_pair and self.uplink:
+            return True
+        return False
 
     def recreate_sessions(self, uids):
         access_log.info("recreating %s sessions" % len(uids))
@@ -248,6 +261,13 @@ class MQTTServer(TCPServer):
         assert isinstance(client, MQTTClient)
         self.clients[client.uid] = client
 
+        if not self.uplink and "uplink" == client.uid:
+            # self.uplink shall be the tegris-representation of the local
+            # paho partner pair client facing tegris. It's likely that
+            # no external client could connect beforehand with uid 'uplink'.
+            # TODO check authorization for 'uplink'
+            self.uplink = client
+
     def remove_client(self, client):
         """
         Removes a client from the know clients list. It's safe to call this
@@ -299,38 +319,71 @@ class MQTTServer(TCPServer):
 
                 client.publish(cache[qos])
 
-    """
-    1. Write to hacked topic list
-    2. Check if uplink is set
-    3. Check for origin
-    4. Assert that all types fit
-    5. Send new topic to upstream
-    """
+    def _communicate_if_new_topic(self, msg, sender_uid, subscriptions):
+        '''
+        This
+        :param sender_uid:
+        :return:
+        '''
+        """
+        1. Write to hacked topic list
+        2. Check if uplink is set
+        3. Check for origin
+        4. Assert that all types fit
+        5. Send new topic to upstream
+        """
 
-    def decide_uplink_publish(self, msg, sender_uid):
+        # 0.
+        msg.retain = True
+
         # 1.
-        if not (msg.topic, msg.qos) in self.hacked_topic_list:
-            print("Added Topic to Publishlist: {} QoS: {} Payload: {}".format(msg.topic, msg.qos, msg.payload))
-            self.hacked_topic_list.append((msg.topic, msg.qos))
-        # 2.
-        if not self.has_uplink():
-            return
-        # 3. don't send it back where it came from
-        if self.uplink.get_uid() == sender_uid:
-            return
-        # TODO decide whether to publish with contents or announce without contents!
-        # announce only: keep track of (topic, qos) and announce only once
-        # 4.
-        assert isinstance(self.uplink, MQTTClient)
-        assert isinstance(msg, Publish)
-        # 5.
-        # XXX announce via shorter route; try long route to test long route in general
-        # self.uplink.send_packet(msg) # long route
-        # self.paho_partner_pair.announce(msg.topic, msg.qos) # shorter route
-        self.paho_partner_pair.announce(msg)
-        # shorter route
+        try:
+            self.topic_tracker.add_topic(msg.topic, sender_uid)
+        except (BeginTracking):
+            print("NEW TOPIC: \"%s\"\n" % (msg.topic))
 
-    def broadcast_message(self, msg, sender_uid):
+            for topic,origin in self.topic_tracker.iterator():
+                print("topic \"%s\" provided by %s" % (topic,origin))
+
+            for m,q,id in self.sub_tracker.subscription_iterator(msg.topic):
+                print("subscription \"%s\" %d   from %s" % (m,q,id))
+                provider = self.clients.get(sender_uid)
+                if provider and provider.is_broker():
+                    print("FORWARDING subscription \"%s\" %d   from %s" % (m,q,id))
+                    submsg = Subscribe.generate_single_sub(m, q)
+                    provider.write(submsg)
+            """
+            if subscriptions:
+                # FIXME need mask, is not actually returned until now
+                for uid, mask in subscriptions.items():
+                    # TODO FIXME if new topic has matching subscription: subscribe sender !
+                    submsg = Subscribe.generate_single_sub(mask, 0) # FIXME magic
+                    client = self.clients.get(uid)
+                    if client and client.is_broker():
+                        client.write(submsg)
+            """
+            # 2.
+            if not self.has_uplink():
+                client_logger.debug("cancel: decide_uplink_publish() - has no uplink!")
+                return
+            assert isinstance(self.uplink, MQTTClient)
+            assert isinstance(msg, Publish)
+
+            # 3. don't send it back where it came from
+            if self.uplink.uid == sender_uid:
+                client_logger.debug("cancel: decide_uplink_publish() - uplink transmitted the message")
+                return
+            # 5.
+            client_logger.info("Announcing %s" % msg.topic)
+            self.uplink.send_packet(msg)
+
+        except (Exception) as e:
+            traceback.print_exc()
+            client_logger.error("ERROR EXCEPTION: %s" % e)
+        else:
+            pass # already announced once
+
+    def broadcast_message(self, msg, sender_uid, subscriptions):
         """
         Broadcasts a message to all clients with matching subscriptions,
         respecting the subscription QoS and restrictions on packet loops.
@@ -348,73 +401,19 @@ class MQTTServer(TCPServer):
 
         cache = {}
 
-        for client in self.clients.values():
+        for client_uid, qos in subscriptions.items():
+            if not client_uid in self.clients:
+                client_logger.error("[uid: %s] deleted client still has subscriptions!" % client_uid)
+                continue
+            client = self.clients[client_uid]
             # XXX Packet loop restriction #4: no forwarding to sender if sender
             # also receives subscriptions.
-            if client.uid == sender_uid and client.receive_subscriptions:
+            if client_uid == sender_uid and client.is_broker():
                 continue
             if client.is_broker():
-                self.dispatch_message(client, msg, cache)
+                self.dispatch_message(client, msg, cache) # brokers get original message
             else:
                 self.dispatch_message(client, msg_reduced, cache)
-        # print("CALL DECIDE UPLINK PUBLISH")
-        self.decide_uplink_publish(msg, sender_uid)
-
-    def forward_subscription(self, topic, granted_qos, sender_uid):
-        """
-        :param topic_qos: A list of topic-qos-pairs to forward.
-        :param sender_uid: sender's ID, don't send subscription back there!
-        :return: FIXME (not specified yet)
-        """
-        """
-        if not (topic, granted_qos) in self.hacked_topic_list:
-            access_log.info("[.....] forwarding subscription from: \"%s\"" % sender_uid)
-            # TODO rebuild package with subscription intents; think about qos
-            msg = Subscribe()
-
-            # recipients = [c for c in self.clients if c.receive_subscriptions and not c.uid == sender_uid]
-            recipients = filter(lambda client: client.receive_subscriptions and not client.uid == sender_uid,
-                            self.clients.values())
-            for client in recipients:
-                client.send_packet(msg)
-            # TODO send it to "uplink" message broker if it did not come from there
-            if sender_uid:  # XXX uplink is not a client, assume sender_uid would be None
-                pass
-                # Uplink.send_packet(msg)
-        """
-        access_log.info("[.....] forwarding subscription from: \"%s\"" % sender_uid)
-
-        # TODO rebuild package with subscription intents; think about qos
-        msg = Subscribe()
-
-        # recipients = [c for c in self.clients if c.receive_subscriptions and not c.uid == sender_uid]
-        recipients = filter(lambda client: client.receive_subscriptions and not client.uid == sender_uid,
-                            self.clients.values())
-        for client in recipients:
-            client.send_packet(msg)
-
-        # TODO send it to "uplink" message broker if it did not come from there
-        if sender_uid:  # XXX uplink is not a client, assume sender_uid would be None
-            pass
-            # Uplink.send_packet(msg)
-
-    def disconnect_client(self, client):
-        """
-        Disconnects a MQTT client. Can be safely called without checking if the
-        client is connected.
-
-        :param MQTTClient client: The MQTTClient to be disconnect
-        """
-        assert isinstance(client, MQTTClient)
-        client.disconnect()
-
-    def disconnect_all_clients(self):
-        """ Disconnect all known clients. """
-
-        # The tuple() is needed because the dictionary could change during the
-        # iteration
-        for client in tuple(self.clients.values()):
-            self.disconnect_client(client)
 
     def handle_incoming_publish(self, msg, sender_uid):
         """
@@ -427,13 +426,94 @@ class MQTTServer(TCPServer):
         :param Publish msg: The Publish message to be processed.
         :param MQTTClient sender: The client which sent the message.
         """
+        assert isinstance(msg, Publish)
         assert isinstance(sender_uid, str)
 
         if msg.retain is True:
             self._retained_messages.save(msg, sender_uid)
 
-        # access_log.info("[.....] broadcasting payload: \"%s\"" % msg.payload)
-        self.broadcast_message(msg, sender_uid)
+        # get subscriptions
+        subscriptions = self.sub_tracker.get_subscriptions(msg.topic)
+        print(">> subs for topic \"%s\":\n" % msg.topic, subscriptions)
+
+        # serve subscribers
+        self.broadcast_message(msg, sender_uid, subscriptions)
+
+        # maybe tell or subscribe other brokers
+        self._communicate_if_new_topic(msg, sender_uid, subscriptions)
+
+    def handle_incoming_subscribe(self, mask, engine, qos, sender_uid):
+        assert isinstance(mask, str)
+        #assert isinstance(engine, _sre.SRE_Pattern)
+        assert isinstance(qos, int)
+        assert isinstance(sender_uid, str)
+
+        try:
+            self.sub_tracker.add_subscription(mask, qos, sender_uid)
+        except (BeginTracking) as e:
+            client_logger.info("New subscription mask \"%s\", distribute it." % mask)
+            matching_topics = self.topic_tracker.get_matching_topics(mask)
+            contains_wildcards = bool(mask.find('+')) or bool(mask.find('#'))
+
+            # create Subscribe message and send it to brokers
+            msg = Subscribe.generate_single_sub(mask, qos)
+
+            broker_clients = [c for uid, c in self.clients.items() if c.is_broker() and not uid == sender_uid]
+            if False and contains_wildcards: # FIXME condition. but i think this case isn't needed. broker subscribe on announcement
+                for b in broker_clients:
+                    b.write(msg)
+            else:
+                # get each client where a matching topic came from and forward the subscription as is if broker-client.
+                for topic, origin_uid in matching_topics.items():
+                    assert isinstance(origin_uid, str)
+                    client = self.clients.get(origin_uid)
+                    if client in broker_clients:
+                        client.write(msg)
+
+            # forward to uplink if it's likely to get more matches from there
+            if self.has_uplink() and not self.uplink.uid == sender_uid:
+                if contains_wildcards or not matching_topics:
+                    self.uplink.write(msg)
+
+        except (Exception) as e:
+            traceback.print_exc()
+            client_logger.error("ERROR EXCEPTION: %s" % e)
+        self.sub_tracker.print()
+
+        '''
+        forwarding decision making:
+        #1 escalate upwards until topic is found
+           (hint: masks with wildcards can never be found to full extend and therefore are always forwarded)
+        #2 only forward downwards if some matching topic is known to be there
+        --- as a flow ---
+        if topic not found:
+            escalate to uplink
+        else:
+            if topic came from a broker-client below:
+                subscribe it there
+        '''
+        print("iterate over subscriptions:")
+        for m,q,o in self.sub_tracker.subscription_iterator():
+            print("subscription \"%s\" %d   from %s" % (m,q,o))
+
+    def handle_incoming_unsubscribe(self, mask, sender_uid):
+        try:
+            self.sub_tracker.remove_subscription(mask, sender_uid)
+        except (EndTracking) as e:
+            # TODO communicate unsubscribe to brokers
+            client_logger.error("NOT IMPLEMENTED UNSUBSCRIBE FORWARD")
+            client_logger.error("ERROR EXCEPTION: %s" % e)
+        except (Exception) as e:
+            traceback.print_exc()
+            client_logger.error("ERROR EXCEPTION: %s" % e)
+        self.sub_tracker.print()
+
+        if mask in self.hacked_subs_dict:
+            assert isinstance(self.hacked_subs_dict[mask], list)
+            self.hacked_subs_dict[mask].remove(sender_uid)
+            if not self.hacked_subs_dict[mask]: # list is empty
+                del self.hacked_subs_dict[mask]
+                # last client deleted. TODO broker should unsubscribe this mask now.
 
     def enqueue_retained_message(self, client, subscription_mask):
         """
@@ -452,7 +532,7 @@ class MQTTServer(TCPServer):
         for topic, (message, sender_uid) in self._retained_messages.items():
             # XXX Packet loop restriction #4: no forwarding to sender if sender
             # also receives subscriptions.
-            if client.uid == sender_uid and client.receive_subscriptions:
+            if client.uid == sender_uid and client.is_broker():
                 continue
 
             if message is not None:
@@ -464,6 +544,32 @@ class MQTTServer(TCPServer):
                     msg_copy = msg_obj.copy()
                     msg_copy.qos = qos
                     client.publish(msg_copy)
+
+    def forward_subscription(self, subscription_mask, granted_qos, sender_uid):
+        """
+        :param subscription_mask: subscription_mask (might have with wildcards)
+        :param sender_uid: sender's ID, don't send subscription back there!
+        :return: FIXME (not specified yet)
+        """
+        raise DeprecationWarning("maybe: handle_incoming_subscribe() ?")
+
+    def disconnect_client(self, client):
+        """
+        Disconnects a MQTT client. Can be safely called without checking if the
+        client is connected.
+
+        :param MQTTClient client: The MQTTClient to be disconnect
+        """
+        assert isinstance(client, MQTTClient)
+        client.disconnect()
+
+    def disconnect_all_clients(self):
+        """ Disconnect all known clients. """
+
+        # The tuple() is needed because the dictionary could change during the
+        # iteration
+        for client in tuple(self.clients.values()):
+            self.disconnect_client(client)
 
 
 class stream_handle_context():

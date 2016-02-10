@@ -1,4 +1,5 @@
 import copy
+import uuid
 from itertools import chain
 from broker import MQTTConstants
 
@@ -346,6 +347,14 @@ class Subscribe(BaseMQTTMessage):
             self.id,
             ', '.join([str(l) for t, l in self.subscription_intents]) or '?',
         )
+
+    @classmethod
+    def generate_single_sub(cls, topic, qos):
+        print("generating SUBSCRIBE with qos, topic: %d, \"%s\"" % (qos,topic))
+        msg = Subscribe()
+        msg.id = uuid.uuid4().int >> 114 # XXX 128 bit integer is too big to downscale: append: >> ...
+        msg.subscription_intents = [(topic, qos)]
+        return msg
 
 
 class Suback(BaseMQTTMessage):
